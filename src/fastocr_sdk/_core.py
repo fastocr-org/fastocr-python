@@ -100,12 +100,18 @@ def parse_json(response: httpx.Response) -> Dict[str, Any]:
     if not response.content:
         return {}
     try:
-        return response.json()
+        body = response.json()
     except ValueError as exc:
         raise ServerError(
             "FastOCR returned a response that is not valid JSON",
             status_code=response.status_code,
         ) from exc
+    if not isinstance(body, dict):
+        raise ServerError(
+            "FastOCR returned a response that is not a JSON object",
+            status_code=response.status_code,
+        )
+    return body
 
 
 def parse_retry_after(value: Optional[str]) -> Optional[float]:

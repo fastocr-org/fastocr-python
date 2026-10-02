@@ -1,4 +1,6 @@
 """Both error shapes (handler and API Gateway) and every status-to-exception mapping."""
+import pickle
+
 import httpx
 import pytest
 import respx
@@ -8,8 +10,11 @@ from fastocr_sdk import (
     AuthenticationError,
     BadRequestError,
     DocumentConflictError,
+    DocumentFailedError,
     FastOCRError,
     NotFoundError,
+    PartialResultError,
+    PollingTimeoutError,
     RateLimitError,
     ServerError,
 )
@@ -233,3 +238,25 @@ async def test_a_nested_message_wins_but_the_top_level_message_is_the_fallback(m
     with pytest.raises(AuthenticationError) as caught:
         await call(client.documents.get("doc_2"))
     assert caught.value.message == "unchanged gateway text"
+
+
+async def test_a_2xx_with_a_json_body_that_is_not_an_object_raises_a_server_error(mock, client):
+    mock.get(f"{BASE_URL}/v1/documents/doc_1").respond(200, json=["not", "an", "object"])
+
+    with pytest.raises(ServerError, match="not a JSON object"):
+        await call(client.documents.get("doc_1"))
+
+
+@pytest.mark.parametrize("error", [
+    FastOCRError("boom", status_code=500, code="c", type="t", request_id="r", details={"a": 1}),
+    RateLimitError("slow down", status_code=429, retry_after=2.0),
+    PollingTimeoutError("still running", document_id="doc_1", last_status="processing"),
+    PartialResultError("partial", document_id="doc_1", pages_processed=3, pages_billed=3, pages_total=9),
+    DocumentFailedError("failed", document_id="doc_1", code="buy_pages", retryable=False, type="insufficient_credits"),
+])
+def test_errors_survive_pickling_so_worker_processes_can_raise_them(error):
+    restored = pickle.loads(pickle.dumps(error))
+
+    assert type(restored) is type(error)
+    assert str(restored) == str(error)
+    assert vars(restored) == vars(error)

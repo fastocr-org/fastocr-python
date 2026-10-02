@@ -1,5 +1,12 @@
 """Exceptions raised by the FastOCR SDK."""
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
+
+
+def _restore(error_class: type, args: Tuple[Any, ...], state: Dict[str, Any]) -> "FastOCRError":
+    error = error_class.__new__(error_class)
+    Exception.__init__(error, *args)
+    error.__dict__.update(state)
+    return error
 
 
 class FastOCRError(Exception):
@@ -22,6 +29,10 @@ class FastOCRError(Exception):
         self.type = type
         self.request_id = request_id
         self.details = details or {}
+
+    # Subclasses take keyword-only arguments, which the default exception pickling cannot replay.
+    def __reduce__(self) -> Tuple[Any, ...]:
+        return (_restore, (type(self), self.args, self.__dict__.copy()))
 
     def __str__(self) -> str:
         parts = [self.message]

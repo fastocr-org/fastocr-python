@@ -29,4 +29,7 @@ First public release. Document OCR (`/v1/documents`) only.
 - A blank or whitespace-only API key is treated as missing, and whitespace around a key is
   trimmed (a trailing newline used to surface as a connection error).
 - Unknown response fields, statuses and error codes are tolerated.
+- A 2xx response whose body is not a JSON object raises `ServerError`.
+- Every SDK error can be pickled, so worker processes (multiprocessing, Celery) can pass
+  them back.
 - Distribution `fastocr-sdk`, import package `fastocr_sdk`.
