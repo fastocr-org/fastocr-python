@@ -4,7 +4,7 @@ All notable changes to this SDK are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [semantic versioning](https://semver.org).
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-10-02
 
 First public release. Document OCR (`/v1/documents`) only.
 
