@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 import respx
 
+from conftest import DIGEST, call
 from fastocr_sdk import (
     AuthenticationError,
     BadRequestError,
@@ -27,8 +28,6 @@ from fastocr_sdk import (
     RateLimitError,
     ServerError,
 )
-
-from conftest import call
 
 
 def find_spec_path():
@@ -48,7 +47,7 @@ pytestmark = pytest.mark.skipif(
 
 CALLS = {
     "createDocument": lambda docs: docs.create(
-        "scan.pdf", 1024, idempotency_key="key-1", external_id="order-1", sha256="n4bQgYhMfWWaL+qgxVrQFaO/TxsrC4Is0V1sFbDwCgg="
+        "scan.pdf", 1024, idempotency_key="key-1", external_id="order-1", sha256=DIGEST
     ),
     "listDocuments": lambda docs: docs.list(limit=5, status="completed", cursor="cur", updated_since="2026-10-01"),
     "getDocument": lambda docs: docs.get("doc-1"),
@@ -93,9 +92,10 @@ OPERATIONS = [
 
 STRUCTURAL_KEYWORDS = {
     "$ref", "type", "properties", "required", "items", "enum", "nullable", "minimum", "maximum",
-    "minLength", "format", "additionalProperties", "anyOf", "oneOf",
+    "minLength", "maxLength", "pattern", "format", "additionalProperties", "anyOf", "oneOf",
 }
 ANNOTATION_KEYWORDS = {"description", "example", "examples", "default", "title"}
+PATTERN_SAMPLE = DIGEST
 SUPPORTED_TYPES = {"string", "integer", "boolean", "object", "array"}
 SUPPORTED_FORMATS = {"uri", "date-time", "int64"}
 
@@ -155,6 +155,10 @@ def validate(schema, value, where="body"):
             errors.append(f"{where}: above maximum")
     if isinstance(value, str) and len(value) < schema.get("minLength", 0):
         errors.append(f"{where}: too short")
+    if isinstance(value, str) and len(value) > schema.get("maxLength", len(value)):
+        errors.append(f"{where}: too long")
+    if isinstance(value, str) and "pattern" in schema and not re.search(schema["pattern"], value):
+        errors.append(f"{where}: does not match {schema['pattern']}")
     return errors
 
 
@@ -207,6 +211,9 @@ def plain_samples(schema):
         return [max(schema.get("minimum", 1), 1)]
     if kind == "boolean":
         return [True]
+    if "pattern" in schema:
+        assert re.search(schema["pattern"], PATTERN_SAMPLE), f"unsupported pattern {schema['pattern']}"
+        return [PATTERN_SAMPLE]
     formats = {"uri": "https://example.test/file", "date-time": "2026-10-01T12:00:00+00:00"}
     return [formats.get(schema.get("format"), "text")]
 
@@ -376,7 +383,7 @@ def test_every_schema_in_the_spec_uses_only_supported_keywords():
 @pytest.mark.parametrize(
     "schema",
     [
-        {"type": "string", "pattern": "^a"},
+        {"type": "string", "contentEncoding": "base64"},
         {"allOf": [{"type": "string"}]},
         {"type": "number"},
         {"type": "string", "format": "email"},

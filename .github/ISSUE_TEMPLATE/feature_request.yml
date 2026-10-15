@@ -1,0 +1,20 @@
+name: Feature request
+description: Suggest an improvement to fastocr-sdk
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: The problem you want solved, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: How you would like the SDK to behave. Example code helps.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you tried

@@ -5,7 +5,18 @@ import random
 import re
 import uuid
 from pathlib import Path
-from typing import Any, AsyncIterator, BinaryIO, Dict, FrozenSet, Iterator, Optional, Tuple, Union
+from typing import (
+    Any,
+    AsyncIterator,
+    BinaryIO,
+    Dict,
+    FrozenSet,
+    Iterator,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
 from urllib.parse import quote
 
 import httpx
@@ -33,6 +44,7 @@ BACKOFF_BASE = 0.5
 THROTTLE_BACKOFF_BASE = 1.0
 BACKOFF_CAP = 8.0
 CHUNK_SIZE = 1024 * 1024
+SHA256_BASE64 = re.compile(r"^[A-Za-z0-9+/]{43}=$")
 TRANSFER_TIMEOUT = httpx.Timeout(120.0, connect=10.0)
 
 API_RETRY_STATUSES: FrozenSet[int] = frozenset({429, 502, 503, 504})
@@ -77,6 +89,8 @@ def create_payload(
     filename: str, size_bytes: int, external_id: Optional[str], sha256: Optional[str]
 ) -> Dict[str, Any]:
     check_pdf_filename(filename)
+    if sha256 is not None and not SHA256_BASE64.match(sha256):
+        raise ValueError("sha256 must be the base64 of the raw 32-byte digest, not a hex digest")
     payload: Dict[str, Any] = {"filename": filename, "size_bytes": size_bytes}
     if external_id is not None:
         payload["external_id"] = external_id
@@ -162,7 +176,7 @@ def error_from_response(response: httpx.Response) -> FastOCRError:
     return error_class(message, **options)
 
 
-def transfer_error(error_class: type, action: str, response: httpx.Response) -> FastOCRError:
+def transfer_error(error_class: Type[FastOCRError], action: str, response: httpx.Response) -> FastOCRError:
     code = re.search(r"<Code>([^<]+)</Code>", response.text[:2000])
     detail = f" ({code.group(1)})" if code else ""
     return error_class(
@@ -188,11 +202,11 @@ def retry_delay(
         return None
     if error.status_code is not None and error.status_code not in statuses:
         return None
-    retry_after = getattr(error, "retry_after", None)
+    retry_after: Optional[float] = getattr(error, "retry_after", None)
     if retry_after is not None:
         return retry_after if retry_after <= MAX_RETRY_DELAY else None
     base = THROTTLE_BACKOFF_BASE if error.status_code == 429 else BACKOFF_BASE
-    ceiling = min(BACKOFF_CAP, base * 2 ** attempt)
+    ceiling = min(BACKOFF_CAP, base * 2.0**attempt)
     return ceiling / 2 + random.uniform(0, ceiling / 2)
 
 

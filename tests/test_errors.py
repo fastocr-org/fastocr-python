@@ -5,6 +5,7 @@ import httpx
 import pytest
 import respx
 
+from conftest import BASE_URL, call
 from fastocr_sdk import (
     APIConnectionError,
     AuthenticationError,
@@ -18,8 +19,6 @@ from fastocr_sdk import (
     RateLimitError,
     ServerError,
 )
-
-from conftest import BASE_URL, call
 
 
 def handler_error(code, message, error_type="invalid_request", request_id="req-1"):

@@ -5,6 +5,7 @@ import httpx
 import pytest
 import respx
 
+from conftest import BASE_URL, DIGEST, call
 from fastocr_sdk import (
     APIConnectionError,
     AuthenticationError,
@@ -15,8 +16,6 @@ from fastocr_sdk import (
     ServerError,
     UploadError,
 )
-
-from conftest import BASE_URL, call
 
 CREATED = {"id": "doc_1", "status": "awaiting_upload", "upload_url": "https://s3.test/up/doc_1?sig=1", "expires_at": "x"}
 BUSY = {"error": {"type": "rate_limit", "code": "concurrency_limit", "message": "busy", "request_id": "r"}}
@@ -294,10 +293,10 @@ async def test_the_request_body_is_identical_on_every_attempt(mock, harness):
         httpx.Response(201, json=CREATED),
     ])
 
-    await call(client.documents.create("a.pdf", 10, external_id="e1", sha256="h="))
+    await call(client.documents.create("a.pdf", 10, external_id="e1", sha256=DIGEST))
 
     bodies = [json.loads(c.request.content) for c in route.calls]
-    assert bodies[0] == bodies[1] == {"filename": "a.pdf", "size_bytes": 10, "external_id": "e1", "sha256": "h="}
+    assert bodies[0] == bodies[1] == {"filename": "a.pdf", "size_bytes": 10, "external_id": "e1", "sha256": DIGEST}
 
 
 THROTTLED = {

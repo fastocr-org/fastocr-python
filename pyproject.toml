@@ -17,7 +17,9 @@ authors = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -37,6 +39,8 @@ dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.23.0",
     "respx>=0.21.0",
+    "ruff>=0.6",
+    "mypy>=1.10",
 ]
 
 [project.urls]
@@ -58,3 +62,16 @@ include = ["src", "tests", "examples", "README.md", "LICENSE", "CHANGELOG.md"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["src"]

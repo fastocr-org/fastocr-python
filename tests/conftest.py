@@ -5,6 +5,7 @@ import pytest
 from fastocr_sdk import AsyncFastOCR, FastOCR
 
 BASE_URL = "https://api.test"
+DIGEST = "n4bQgYhMfWWaL+qgxVrQFaO/TxsrC4Is0V1sFbDwCgg="
 
 
 class Harness:

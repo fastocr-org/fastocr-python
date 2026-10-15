@@ -4,6 +4,20 @@ All notable changes to this SDK are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [semantic versioning](https://semver.org).
 
+## [0.1.1] - 2026-10-14
+
+- Uploads and result downloads now go through one long-lived transfer client instead of
+  a new client per attempt. `FastOCR` and `AsyncFastOCR` accept `transport`, `verify`,
+  `trust_env` and `transfer_timeout`, which apply to the API connection and to the
+  transfers alike. The transfer client is closed by `close()` (awaited on the async
+  client) and by the context managers. Retry behavior is unchanged.
+- `documents.create` raises `ValueError` when `sha256` is not the base64 of the raw
+  32-byte digest (for example a hex digest), instead of waiting for the API's
+  `400 invalid_sha256`.
+- README: corrected the retry description (uploads and downloads retry 500 and never
+  429), documented that a replayed `create` gets a fresh `upload_url`, and added a CI
+  badge.
+
 ## [0.1.0] - 2026-10-02
 
 First public release. Document OCR (`/v1/documents`) only.
@@ -22,8 +36,6 @@ First public release. Document OCR (`/v1/documents`) only.
   and `document_id`.
 - `extract_text()` raises `PartialResultError` instead of returning truncated text;
   pass `allow_partial=True` to accept it.
-- API Gateway error bodies (`{"message"}` and the newer `error` object) raise the same
-  exceptions, with `code`, `type` and `request_id` when present.
 - `process()` with a caller-supplied `idempotency_key` is safe to repeat: it finds the same
   document and waits for it instead of failing with 409 `document_not_startable`.
 - A blank or whitespace-only API key is treated as missing, and whitespace around a key is

@@ -1,9 +1,10 @@
 """Asynchronous FastOCR client. Behaves exactly like the sync client."""
 import asyncio
 import os
+import ssl
 import time
 from pathlib import Path
-from typing import Any, BinaryIO, Awaitable, Callable, Dict, FrozenSet, Optional, TypeVar, Union
+from typing import Any, Awaitable, BinaryIO, Callable, Dict, FrozenSet, Optional, TypeVar, Union
 
 import httpx
 
@@ -67,8 +68,7 @@ class AsyncDocumentsResource:
 
         async def attempt() -> None:
             try:
-                async with httpx.AsyncClient(timeout=_core.TRANSFER_TIMEOUT) as uploader:
-                    res = await uploader.put(upload_url, content=source.async_body(), headers=headers)
+                res = await self._client._transfer.put(upload_url, content=source.async_body(), headers=headers)
             except httpx.RequestError as exc:
                 raise UploadError(f"Network error while uploading the document: {exc}") from exc
             if not res.is_success:
@@ -113,8 +113,7 @@ class AsyncDocumentsResource:
 
         async def attempt() -> bytes:
             try:
-                async with httpx.AsyncClient(timeout=_core.TRANSFER_TIMEOUT) as downloader:
-                    res = await downloader.get(url)
+                res = await self._client._transfer.get(url)
             except httpx.RequestError as exc:
                 raise DownloadError(f"Network error while downloading the text: {exc}") from exc
             if not res.is_success:
@@ -137,13 +136,12 @@ class AsyncDocumentsResource:
 
     async def _stream_pdf(self, url: str, sink: BinaryIO) -> None:
         try:
-            async with httpx.AsyncClient(timeout=_core.TRANSFER_TIMEOUT) as downloader:
-                async with downloader.stream("GET", url) as response:
-                    if not response.is_success:
-                        await response.aread()
-                        raise _core.download_error_from_response(response)
-                    async for chunk in response.aiter_bytes():
-                        sink.write(chunk)
+            async with self._client._transfer.stream("GET", url) as response:
+                if not response.is_success:
+                    await response.aread()
+                    raise _core.download_error_from_response(response)
+                async for chunk in response.aiter_bytes():
+                    sink.write(chunk)
         except httpx.RequestError as exc:
             raise DownloadError(f"Network error while downloading the PDF: {exc}") from exc
 
@@ -218,6 +216,10 @@ class AsyncFastOCR:
 
     `max_retries` bounds retries of connection errors, 429 (honoring Retry-After)
     and 502/503/504. Other errors are raised immediately.
+
+    `transport`, `verify` and `trust_env` configure both the API connection and the
+    file transfers (uploads and result downloads); `transfer_timeout` overrides the
+    transfer timeout (default: 10 s to connect, 120 s otherwise).
     """
 
     def __init__(
@@ -226,6 +228,11 @@ class AsyncFastOCR:
         base_url: Optional[str] = None,
         timeout: float = 30.0,
         max_retries: int = _core.DEFAULT_MAX_RETRIES,
+        *,
+        transfer_timeout: Optional[float] = None,
+        transport: Optional[httpx.AsyncBaseTransport] = None,
+        verify: Union[bool, str, ssl.SSLContext] = True,
+        trust_env: bool = True,
     ):
         self.api_key = _core.resolve_api_key(api_key)
         self.base_url = _core.resolve_base_url(base_url)
@@ -236,6 +243,15 @@ class AsyncFastOCR:
             base_url=self.base_url,
             timeout=timeout,
             headers=_core.default_headers(self.api_key),
+            transport=transport,
+            verify=verify,
+            trust_env=trust_env,
+        )
+        self._transfer = httpx.AsyncClient(
+            timeout=_core.TRANSFER_TIMEOUT if transfer_timeout is None else transfer_timeout,
+            transport=transport,
+            verify=verify,
+            trust_env=trust_env,
         )
         self.documents = AsyncDocumentsResource(self)
 
@@ -281,7 +297,10 @@ class AsyncFastOCR:
         return await self._retry(attempt, _core.API_RETRY_STATUSES)
 
     async def close(self) -> None:
-        await self._http.aclose()
+        try:
+            await self._http.aclose()
+        finally:
+            await self._transfer.aclose()
 
     async def __aenter__(self) -> "AsyncFastOCR":
         return self

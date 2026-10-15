@@ -1,0 +1,38 @@
+name: Bug report
+description: Something in fastocr-sdk does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got. Include the full error message.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: A short snippet. Do not include API keys or private documents.
+      render: python
+    validations:
+      required: true
+  - type: input
+    id: sdk-version
+    attributes:
+      label: fastocr-sdk version
+      placeholder: "0.1.1"
+    validations:
+      required: true
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version and OS
+      placeholder: "3.12 on macOS 15"
+    validations:
+      required: true
+  - type: input
+    id: request-id
+    attributes:
+      label: Request ID
+      description: The `request_id` on the error, if there is one.

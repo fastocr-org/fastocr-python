@@ -1,8 +1,8 @@
 """Exceptions raised by the FastOCR SDK."""
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Type
 
 
-def _restore(error_class: type, args: Tuple[Any, ...], state: Dict[str, Any]) -> "FastOCRError":
+def _restore(error_class: Type["FastOCRError"], args: Tuple[Any, ...], state: Dict[str, Any]) -> "FastOCRError":
     error = error_class.__new__(error_class)
     Exception.__init__(error, *args)
     error.__dict__.update(state)

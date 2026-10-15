@@ -1,5 +1,6 @@
 # FastOCR Python SDK
 
+[![CI](https://github.com/fastocr-org/fastocr-python/actions/workflows/ci.yml/badge.svg)](https://github.com/fastocr-org/fastocr-python/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/fastocr-sdk.svg)](https://pypi.org/project/fastocr-sdk/)
 [![Python](https://img.shields.io/pypi/pyversions/fastocr-sdk.svg)](https://pypi.org/project/fastocr-sdk/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -27,11 +28,18 @@ from fastocr_sdk import FastOCR
 
 ## Get access
 
-API access is currently granted per account on request. Email
-[support@fastocr.org](mailto:support@fastocr.org?subject=FastOCR%20API%20Access%20Request)
-from your FastOCR account email. Once approved, create a key at
-<https://fastocr.org/developers/keys>. Approved accounts get 10 free pages per
-month and buy more pages by card on the same page.
+FastOCR grants API access to each account on request during private beta.
+
+1. Email [support@fastocr.org](mailto:support@fastocr.org?subject=FastOCR%20API%20Access%20Request)
+   from your FastOCR account email to request API access.
+2. After approval, create an API key in the
+   [developer console](https://fastocr.org/developers/keys).
+3. To process more than the free pages, buy a prepaid API page pack by card in the
+   [developer console](https://fastocr.org/developers/keys#buy-api-pages).
+
+An approved account gets 10 free document pages per month. A document that runs
+out of pages fails with buy_pages. After you buy pages, call /start again on the
+same document.
 
 ```bash
 export FASTOCR_API_KEY="your_api_key"
@@ -183,12 +191,13 @@ document, which is billed as a new document.
 
 ## Retries and idempotency
 
-`FastOCR(max_retries=2)` retries connection errors, HTTP 429 and 502/503/504
-with exponential backoff and jitter. It waits for `Retry-After` when the server
-sends one (up to 60 seconds; longer waits are raised as `RateLimitError`). It
-does not retry other errors, including 400, 401, 403, 404, 409 and 500. Set
-`max_retries=0` to turn retries off. Uploads and downloads of results retry the
-same way.
+`FastOCR(max_retries=2)` retries API calls on connection errors, HTTP 429 and
+502/503/504, with exponential backoff and jitter. It waits for `Retry-After` when
+the server sends one (up to 60 seconds; longer waits are raised as
+`RateLimitError`). API calls do not retry other errors, including 400, 401, 403,
+404, 409 and 500. Uploads and result downloads retry connection errors and
+500/502/503/504, and never retry 429. The backoff for a 429 starts at 0.5 to 1
+second, then 1 to 2 seconds, and so on. Set `max_retries=0` to turn retries off.
 
 Creating a document is safe to retry because every `create` call sends an
 `Idempotency-Key`, and the same key is reused across all retries of that call.
@@ -200,7 +209,9 @@ job = client.documents.process("scan.pdf", idempotency_key="invoice-2026-10-001"
 ```
 
 Calling `process()` again with the same key is safe: it finds the same document and,
-if it was already started, just waits for it instead of uploading again.
+if it was already started, just waits for it instead of uploading again. A replayed
+`create` whose upload URL has expired gets a fresh `upload_url`, as long as the
+document is still awaiting upload.
 
 Reusing a key with a different filename, size, `sha256` or `external_id`
 raises `DocumentConflictError` (`idempotency_key_conflict`).
@@ -219,8 +230,15 @@ FastOCR(
     base_url=None,      # defaults to $FASTOCR_BASE_URL, then https://api.fastocr.org
     timeout=30.0,       # seconds per API request
     max_retries=2,
+    transfer_timeout=None,  # seconds per upload or download; defaults to 120 (10 to connect)
+    transport=None,     # an httpx transport, for example a proxy or a mock in tests
+    verify=True,        # TLS verification: True, False, a CA bundle path or an ssl.SSLContext
+    trust_env=True,     # read HTTP(S)_PROXY and SSL_CERT_FILE from the environment
 )
 ```
+
+API requests and the uploads and downloads to S3 share these connection
+settings. The API key is sent only to the FastOCR API, never to S3.
 
 ## Versioning and compatibility
 

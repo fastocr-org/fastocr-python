@@ -7,6 +7,7 @@ import pytest
 import respx
 
 import fastocr_sdk
+from conftest import BASE_URL, DIGEST, call
 from fastocr_sdk import (
     AsyncFastOCR,
     AuthenticationError,
@@ -15,8 +16,6 @@ from fastocr_sdk import (
     PartialResultError,
     PollingTimeoutError,
 )
-
-from conftest import BASE_URL, call
 
 UPLOAD_URL = "https://s3.test/bucket/uploads/original.pdf?X-Amz-Signature=sig"
 CREATED = {
@@ -36,6 +35,16 @@ FAILED_BODY = {
         "retryable": False,
     },
 }
+
+
+def _transport_for(kind, handler):
+    if kind == "sync":
+        return httpx.MockTransport(handler)
+
+    async def async_handler(request):
+        return handler(request)
+
+    return httpx.MockTransport(async_handler)
 
 
 @pytest.fixture
@@ -71,12 +80,12 @@ async def test_create_sends_the_documented_body_and_returns_a_model(mock, client
     route = mock.post(f"{BASE_URL}/v1/documents").respond(201, json={**CREATED, "new_field": 1})
 
     created = await call(client.documents.create(
-        "scan.pdf", 1024, idempotency_key="key-1", external_id="order-9", sha256="abc="
+        "scan.pdf", 1024, idempotency_key="key-1", external_id="order-9", sha256=DIGEST
     ))
 
     request = route.calls.last.request
     assert json.loads(request.content) == {
-        "filename": "scan.pdf", "size_bytes": 1024, "external_id": "order-9", "sha256": "abc=",
+        "filename": "scan.pdf", "size_bytes": 1024, "external_id": "order-9", "sha256": DIGEST,
     }
     assert request.headers["Idempotency-Key"] == "key-1"
     assert (created.id, created.status, created.upload_url) == ("doc_1", "awaiting_upload", UPLOAD_URL)
@@ -97,6 +106,29 @@ async def test_create_rejects_non_pdf_before_any_request(mock, client):
     with pytest.raises(ValueError, match="PDF files only"):
         await call(client.documents.create("scan.png", 10))
     assert mock.calls.call_count == 0
+
+
+async def test_create_rejects_a_hex_sha256_before_any_request(mock, client):
+    with pytest.raises(ValueError, match="sha256"):
+        await call(client.documents.create("scan.pdf", 10, sha256="ab" * 32))
+    assert mock.calls.call_count == 0
+
+
+async def test_transfers_use_the_shared_transfer_client_and_close_with_the_client(harness):
+    seen = []
+
+    def handler(request):
+        seen.append((request.method, str(request.url)))
+        return httpx.Response(200, text="hello" if request.method == "GET" else "")
+
+    client = harness.client(transport=_transport_for(harness.kind, handler), transfer_timeout=7)
+    await call(client.documents.upload(UPLOAD_URL, b"%PDF-1"))
+
+    assert seen == [("PUT", UPLOAD_URL)]
+    assert client._transfer.timeout == httpx.Timeout(7)
+    assert not client._transfer.is_closed
+    await call(client.close())
+    assert client._transfer.is_closed and client._http.is_closed
 
 
 async def test_start_returns_the_status_body(mock, client):

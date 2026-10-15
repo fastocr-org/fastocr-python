@@ -8,9 +8,8 @@ import os
 
 import pytest
 
-from fastocr_sdk import AuthenticationError, NotFoundError
-
 from conftest import call
+from fastocr_sdk import AuthenticationError, NotFoundError
 
 API_KEY = os.environ.get("FASTOCR_LIVE_API_KEY")
 BASE_URL = os.environ.get("FASTOCR_LIVE_BASE_URL")

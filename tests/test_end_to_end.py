@@ -6,10 +6,9 @@ import tracemalloc
 
 import pytest
 
-from fastocr_sdk import DocumentFailedError
+from conftest import DIGEST, call
 from fake_server import PAGES_TEXT, RESULT_PDF, FakeApi
-
-from conftest import call
+from fastocr_sdk import DocumentFailedError
 
 LARGE_FILE_BYTES = 50 * 1024 * 1024
 MEMORY_BUDGET_BYTES = 10 * 1024 * 1024
@@ -107,11 +106,11 @@ async def test_unseekable_stream_is_buffered_with_the_right_length(make_client, 
 async def test_sha256_is_sent_as_the_signed_checksum_header(make_client, api):
     client = make_client()
 
-    await call(client.documents.process(b"%PDF-1", filename="x.pdf", sha256="abc=", poll_interval=0))
+    await call(client.documents.process(b"%PDF-1", filename="x.pdf", sha256=DIGEST, poll_interval=0))
 
     headers = {name.lower(): value for name, value in api.uploads[0]["headers"].items()}
-    assert headers["x-amz-checksum-sha256"] == "abc="
-    assert api.created["doc-1"]["sha256"] == "abc="
+    assert headers["x-amz-checksum-sha256"] == DIGEST
+    assert api.created["doc-1"]["sha256"] == DIGEST
 
 
 async def test_failed_document_raises_with_code(harness, tmp_path):

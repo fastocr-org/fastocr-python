@@ -1,5 +1,6 @@
 """Synchronous FastOCR client."""
 import os
+import ssl
 import time
 from pathlib import Path
 from typing import Any, BinaryIO, Callable, Dict, FrozenSet, Optional, TypeVar, Union
@@ -66,8 +67,7 @@ class DocumentsResource:
 
         def attempt() -> None:
             try:
-                with httpx.Client(timeout=_core.TRANSFER_TIMEOUT) as uploader:
-                    res = uploader.put(upload_url, content=source.sync_body(), headers=headers)
+                res = self._client._transfer.put(upload_url, content=source.sync_body(), headers=headers)
             except httpx.RequestError as exc:
                 raise UploadError(f"Network error while uploading the document: {exc}") from exc
             if not res.is_success:
@@ -112,8 +112,7 @@ class DocumentsResource:
 
         def attempt() -> bytes:
             try:
-                with httpx.Client(timeout=_core.TRANSFER_TIMEOUT) as downloader:
-                    res = downloader.get(url)
+                res = self._client._transfer.get(url)
             except httpx.RequestError as exc:
                 raise DownloadError(f"Network error while downloading the text: {exc}") from exc
             if not res.is_success:
@@ -136,13 +135,12 @@ class DocumentsResource:
 
     def _stream_pdf(self, url: str, sink: BinaryIO) -> None:
         try:
-            with httpx.Client(timeout=_core.TRANSFER_TIMEOUT) as downloader:
-                with downloader.stream("GET", url) as response:
-                    if not response.is_success:
-                        response.read()
-                        raise _core.download_error_from_response(response)
-                    for chunk in response.iter_bytes():
-                        sink.write(chunk)
+            with self._client._transfer.stream("GET", url) as response:
+                if not response.is_success:
+                    response.read()
+                    raise _core.download_error_from_response(response)
+                for chunk in response.iter_bytes():
+                    sink.write(chunk)
         except httpx.RequestError as exc:
             raise DownloadError(f"Network error while downloading the PDF: {exc}") from exc
 
@@ -217,6 +215,10 @@ class FastOCR:
 
     `max_retries` bounds retries of connection errors, 429 (honoring Retry-After)
     and 502/503/504. Other errors are raised immediately.
+
+    `transport`, `verify` and `trust_env` configure both the API connection and the
+    file transfers (uploads and result downloads); `transfer_timeout` overrides the
+    transfer timeout (default: 10 s to connect, 120 s otherwise).
     """
 
     def __init__(
@@ -225,6 +227,11 @@ class FastOCR:
         base_url: Optional[str] = None,
         timeout: float = 30.0,
         max_retries: int = _core.DEFAULT_MAX_RETRIES,
+        *,
+        transfer_timeout: Optional[float] = None,
+        transport: Optional[httpx.BaseTransport] = None,
+        verify: Union[bool, str, ssl.SSLContext] = True,
+        trust_env: bool = True,
     ):
         self.api_key = _core.resolve_api_key(api_key)
         self.base_url = _core.resolve_base_url(base_url)
@@ -235,6 +242,15 @@ class FastOCR:
             base_url=self.base_url,
             timeout=timeout,
             headers=_core.default_headers(self.api_key),
+            transport=transport,
+            verify=verify,
+            trust_env=trust_env,
+        )
+        self._transfer = httpx.Client(
+            timeout=_core.TRANSFER_TIMEOUT if transfer_timeout is None else transfer_timeout,
+            transport=transport,
+            verify=verify,
+            trust_env=trust_env,
         )
         self.documents = DocumentsResource(self)
 
@@ -280,7 +296,10 @@ class FastOCR:
         return self._retry(attempt, _core.API_RETRY_STATUSES)
 
     def close(self) -> None:
-        self._http.close()
+        try:
+            self._http.close()
+        finally:
+            self._transfer.close()
 
     def __enter__(self) -> "FastOCR":
         return self
