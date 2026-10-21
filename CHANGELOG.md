@@ -4,6 +4,17 @@ All notable changes to this SDK are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [semantic versioning](https://semver.org).
 
+## [0.2.0] - 2026-10-20
+
+- Images: `create`, `process` and `extract_text` accept PNG, JPG, JPEG, GIF, WebP and BMP
+  files as well as PDFs. Each upload is sent with the Content-Type of the filename's
+  extension, which the presigned URL is signed for. `upload` takes `content_type`
+  (default: a path's extension, else `application/pdf`) and `extract_text` takes
+  `filename` for bytes and streams. Other extensions still raise `ValueError` before
+  any request.
+- `wait_for_completion` and `process` back off while polling: `poll_interval` (default
+  2 s) is the first wait, and each later wait is 1.5 times longer, up to 10 s.
+
 ## [0.1.1] - 2026-10-14
 
 - Uploads and result downloads now go through one long-lived transfer client instead of

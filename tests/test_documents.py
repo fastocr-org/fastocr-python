@@ -102,9 +102,9 @@ async def test_create_omits_optional_fields_and_generates_a_key(mock, client):
     assert len(request.headers["Idempotency-Key"]) >= 32
 
 
-async def test_create_rejects_non_pdf_before_any_request(mock, client):
-    with pytest.raises(ValueError, match="PDF files only"):
-        await call(client.documents.create("scan.png", 10))
+async def test_create_rejects_unsupported_types_before_any_request(mock, client):
+    with pytest.raises(ValueError, match="PDF, PNG, JPG"):
+        await call(client.documents.create("scan.tiff", 10))
     assert mock.calls.call_count == 0
 
 
@@ -279,7 +279,7 @@ async def test_failed_pdf_download_leaves_no_file_behind(mock, harness, tmp_path
     assert list(tmp_path.iterdir()) == []
 
 
-async def test_wait_polls_until_completed_and_ignores_unknown_statuses(mock, harness):
+async def test_wait_polls_with_backoff_until_completed_and_ignores_unknown_statuses(mock, harness):
     client = harness.client()
     mock.get(f"{BASE_URL}/v1/documents/doc_1").mock(side_effect=[
         httpx.Response(200, json={"id": "doc_1", "status": "awaiting_upload"}),
@@ -288,10 +288,10 @@ async def test_wait_polls_until_completed_and_ignores_unknown_statuses(mock, har
         httpx.Response(200, json={"id": "doc_1", "status": "completed", "pages_billed": 1}),
     ])
 
-    job = await call(client.documents.wait_for_completion("doc_1", poll_interval=0.5))
+    job = await call(client.documents.wait_for_completion("doc_1", poll_interval=4))
 
     assert job.status == "completed"
-    assert harness.sleeps == [0.5, 0.5, 0.5]
+    assert harness.sleeps == [4, 6, 9]
 
 
 async def test_wait_returns_partial_without_raising(mock, client):
@@ -397,6 +397,51 @@ async def test_process_accepts_bytes_and_streams_and_uses_the_given_filename(moc
     ]
 
 
+@pytest.mark.parametrize("name,content_type", [
+    ("photo.png", "image/png"), ("scan.JPG", "image/jpeg"), ("a.jpeg", "image/jpeg"),
+    ("a.gif", "image/gif"), ("a.webp", "image/webp"), ("a.bmp", "image/bmp"),
+])
+async def test_images_upload_with_the_content_type_of_their_extension(mock, client, tmp_path, name, content_type):
+    image = tmp_path / name
+    image.write_bytes(b"image-bytes")
+    create = mock.post(f"{BASE_URL}/v1/documents").respond(201, json=CREATED)
+    upload = mock.put(url__startswith="https://s3.test/bucket/").respond(200)
+    mock.post(f"{BASE_URL}/v1/documents/doc_1/start").respond(202, json={"status": "processing"})
+    mock.get(f"{BASE_URL}/v1/documents/doc_1").respond(200, json={"id": "doc_1", "status": "completed"})
+
+    await call(client.documents.process(image, poll_interval=0))
+    await call(client.documents.process(b"image-bytes", filename=name, poll_interval=0))
+    await call(client.documents.upload(UPLOAD_URL, image))
+    await call(client.documents.upload(UPLOAD_URL, b"image-bytes", content_type=content_type))
+
+    assert [json.loads(c.request.content)["filename"] for c in create.calls] == [name, name]
+    assert [c.request.headers["Content-Type"] for c in upload.calls] == [content_type] * 4
+
+
+async def test_upload_of_a_path_without_a_known_extension_is_sent_as_pdf(mock, client, tmp_path):
+    path = tmp_path / "tmpk2j3"
+    path.write_bytes(b"%PDF-x")
+    upload = mock.put(url__startswith="https://s3.test/bucket/").respond(200)
+
+    await call(client.documents.upload(UPLOAD_URL, path))
+
+    assert upload.calls.last.request.headers["Content-Type"] == "application/pdf"
+
+
+async def test_extract_text_takes_a_filename_for_image_bytes(mock, client):
+    create = mock.post(f"{BASE_URL}/v1/documents").respond(201, json=CREATED)
+    upload = mock.put(url__startswith="https://s3.test/bucket/").respond(200)
+    mock.post(f"{BASE_URL}/v1/documents/doc_1/start").respond(202, json={"status": "processing"})
+    mock.get(f"{BASE_URL}/v1/documents/doc_1").respond(200, json={"id": "doc_1", "status": "completed"})
+    mock.get(f"{BASE_URL}/v1/documents/doc_1/output").respond(
+        200, json={"format": "text", "url": "https://s3.test/bucket/text", "expires_at": "2026-10-01T12:00:00+00:00"})
+    mock.get("https://s3.test/bucket/text").respond(200, text="hello")
+
+    assert await call(client.extract_text(b"image-bytes", filename="receipt.webp")) == "hello"
+    assert json.loads(create.calls.last.request.content)["filename"] == "receipt.webp"
+    assert upload.calls.last.request.headers["Content-Type"] == "image/webp"
+
+
 async def test_process_uses_the_callers_idempotency_key(mock, client):
     create = mock.post(f"{BASE_URL}/v1/documents").respond(201, json=CREATED)
     mock.put(url__startswith="https://s3.test/bucket/").respond(200)
@@ -408,9 +453,9 @@ async def test_process_uses_the_callers_idempotency_key(mock, client):
     assert create.calls.last.request.headers["Idempotency-Key"] == "mine-1"
 
 
-async def test_process_rejects_non_pdf_and_bad_input_before_any_request(mock, client):
-    with pytest.raises(ValueError, match="PDF files only"):
-        await call(client.documents.process(b"x", filename="scan.png"))
+async def test_process_rejects_unsupported_types_and_bad_input_before_any_request(mock, client):
+    with pytest.raises(ValueError, match="PDF, PNG, JPG"):
+        await call(client.documents.process(b"x", filename="scan.tiff"))
     with pytest.raises(TypeError):
         await call(client.documents.process(12345))
     assert mock.calls.call_count == 0

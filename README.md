@@ -6,9 +6,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Python client for the [FastOCR Document OCR API](https://fastocr.org/docs/documents).
-Send a scanned PDF, get back its text or a searchable PDF.
+Send a scanned PDF or an image, get back its text or a searchable PDF.
 
-- Document OCR only: PDF input, up to 1 GiB per file.
+- Document OCR only: PDF files up to 1 GiB, and PNG, JPG, JPEG, GIF, WebP and BMP images up to 20 MiB (an image counts as one page).
 - Sync (`FastOCR`) and async (`AsyncFastOCR`) clients with identical behavior.
 - Streams large files from disk, retries transient failures, and never creates a document twice.
 - One runtime dependency: `httpx`. Python 3.9+.
@@ -28,18 +28,18 @@ from fastocr_sdk import FastOCR
 
 ## Get access
 
-FastOCR grants API access to each account on request during private beta.
+Any signed-in FastOCR account can create an API key and start right away.
 
-1. Email [support@fastocr.org](mailto:support@fastocr.org?subject=FastOCR%20API%20Access%20Request)
-   from your FastOCR account email to request API access.
-2. After approval, create an API key in the
-   [developer console](https://fastocr.org/developers/keys).
-3. To process more than the free pages, buy a prepaid API page pack by card in the
+1. Sign in and create an API key in the
+   [developer console](https://fastocr.org/developers/keys). You accept the
+   [API terms](https://fastocr.org/api-terms) with your first key.
+2. Run the quickstart below with your key in `FASTOCR_API_KEY`.
+3. When you need more than the free pages, buy a prepaid API page pack by card in the
    [developer console](https://fastocr.org/developers/keys#buy-api-pages).
 
-An approved account gets 10 free document pages per month. A document that runs
-out of pages fails with buy_pages. After you buy pages, call /start again on the
-same document.
+Each account gets 50 free document pages per month. A document that runs out of
+pages fails with buy_pages. After you buy pages, call /start again on the same
+document.
 
 ```bash
 export FASTOCR_API_KEY="your_api_key"
@@ -68,6 +68,15 @@ with FastOCR() as client:
 `job.status` is `completed`, or `partial` if the account ran out of pages
 partway (`job.is_partial`); see [Out of pages](#out-of-pages).
 
+Images work the same way. The file type comes from the extension, so pass
+`filename` when you send bytes or a stream:
+
+```python
+with FastOCR() as client:
+    text = client.extract_text("receipt.jpg")
+    text = client.extract_text(image_bytes, filename="receipt.png")
+```
+
 ## Async
 
 ```python
@@ -92,9 +101,9 @@ page allowance). When fanning out, cap concurrency with a semaphore, as in
 
 ```python
 created = client.documents.create("scan.pdf", size_bytes)    # POST /v1/documents
-client.documents.upload(created.upload_url, "scan.pdf")      # PUT to the presigned URL
+client.documents.upload(created.upload_url, "scan.pdf")      # PUT to the presigned URL (Content-Type from the extension)
 client.documents.start(created.id)                           # POST /v1/documents/{id}/start
-job = client.documents.wait_for_completion(created.id)       # GET until a final status
+job = client.documents.wait_for_completion(created.id)       # GET until a final status (waits 2 s, growing to 10 s)
 text = client.documents.get_text(created.id)                 # GET /output?format=text
 ```
 

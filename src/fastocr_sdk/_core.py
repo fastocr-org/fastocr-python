@@ -43,6 +43,8 @@ MAX_RETRY_DELAY = 60.0
 BACKOFF_BASE = 0.5
 THROTTLE_BACKOFF_BASE = 1.0
 BACKOFF_CAP = 8.0
+POLL_BACKOFF = 1.5
+POLL_INTERVAL_CAP = 10.0
 CHUNK_SIZE = 1024 * 1024
 SHA256_BASE64 = re.compile(r"^[A-Za-z0-9+/]{43}=$")
 TRANSFER_TIMEOUT = httpx.Timeout(120.0, connect=10.0)
@@ -75,9 +77,23 @@ def new_idempotency_key() -> str:
     return str(uuid.uuid4())
 
 
-def check_pdf_filename(filename: str) -> None:
-    if not filename.lower().endswith(".pdf"):
-        raise ValueError("FastOCR Document API accepts PDF files only (.pdf)")
+CONTENT_TYPES = {
+    "pdf": "application/pdf",
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "gif": "image/gif",
+    "webp": "image/webp",
+    "bmp": "image/bmp",
+}
+
+
+def content_type_for(filename: str) -> str:
+    """The Content-Type the presigned upload URL is signed for, from the file extension."""
+    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if extension not in CONTENT_TYPES:
+        raise ValueError("FastOCR Document API accepts PDF, PNG, JPG, JPEG, GIF, WebP and BMP files")
+    return CONTENT_TYPES[extension]
 
 
 def check_output_format(file_format: str) -> None:
@@ -88,7 +104,7 @@ def check_output_format(file_format: str) -> None:
 def create_payload(
     filename: str, size_bytes: int, external_id: Optional[str], sha256: Optional[str]
 ) -> Dict[str, Any]:
-    check_pdf_filename(filename)
+    content_type_for(filename)
     if sha256 is not None and not SHA256_BASE64.match(sha256):
         raise ValueError("sha256 must be the base64 of the raw 32-byte digest, not a hex digest")
     payload: Dict[str, Any] = {"filename": filename, "size_bytes": size_bytes}
@@ -210,9 +226,13 @@ def retry_delay(
     return ceiling / 2 + random.uniform(0, ceiling / 2)
 
 
-def upload_headers(size: int, sha256: Optional[str]) -> Dict[str, str]:
+def next_poll_interval(current: float, start: float) -> float:
+    return max(start, min(current * POLL_BACKOFF, POLL_INTERVAL_CAP))
+
+
+def upload_headers(size: int, sha256: Optional[str], content_type: str = "application/pdf") -> Dict[str, str]:
     # S3 rejects chunked uploads, so Content-Length is always explicit.
-    headers = {"Content-Type": "application/pdf", "Content-Length": str(size)}
+    headers = {"Content-Type": content_type, "Content-Length": str(size)}
     if sha256 is not None:
         headers["x-amz-checksum-sha256"] = sha256
     return headers
@@ -322,6 +342,13 @@ class UploadSource:
         finally:
             if owned:
                 source.close()
+
+
+def upload_content_type(file: FileInput, content_type: Optional[str]) -> str:
+    if content_type:
+        return content_type
+    extension = Path(file).suffix.lower().lstrip(".") if isinstance(file, (str, Path)) else ""
+    return CONTENT_TYPES.get(extension, "application/pdf")
 
 
 def filename_for(file: FileInput, filename: Optional[str]) -> str:

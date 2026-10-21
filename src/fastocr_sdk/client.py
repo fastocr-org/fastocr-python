@@ -54,16 +54,22 @@ class DocumentsResource:
         upload_url: str,
         file: Union[str, Path, bytes, BinaryIO],
         sha256: Optional[str] = None,
+        content_type: Optional[str] = None,
     ) -> None:
         """PUT the file to the presigned URL. Paths and seekable streams are streamed from disk.
 
         `sha256` (base64 of the raw 32-byte digest) is only needed if you passed it to `create`;
-        S3 checks it on upload.
+        S3 checks it on upload. `content_type` must match the filename given to `create`
+        (for example `image/png` for `photo.png`); it defaults to the type of a path's
+        extension, else `application/pdf`.
         """
-        self._upload_source(upload_url, _core.UploadSource(file), sha256)
+        source = _core.UploadSource(file)
+        self._upload_source(upload_url, source, sha256, _core.upload_content_type(file, content_type))
 
-    def _upload_source(self, upload_url: str, source: _core.UploadSource, sha256: Optional[str]) -> None:
-        headers = _core.upload_headers(source.size, sha256)
+    def _upload_source(
+        self, upload_url: str, source: _core.UploadSource, sha256: Optional[str], content_type: str
+    ) -> None:
+        headers = _core.upload_headers(source.size, sha256, content_type)
 
         def attempt() -> None:
             try:
@@ -165,10 +171,13 @@ class DocumentsResource:
     ) -> DocumentJob:
         """Poll until the document is `completed` or `partial`.
 
+        Waits `poll_interval` seconds after the first check, then 1.5 times longer
+        each time, up to 10 seconds (a longer `poll_interval` stays as given).
         Raises DocumentFailedError if it fails and PollingTimeoutError on timeout.
         An unrecognized status counts as still processing.
         """
         deadline = time.monotonic() + timeout
+        interval = poll_interval
         while True:
             job = self.get(document_id)
             if job.is_completed:
@@ -181,7 +190,8 @@ class DocumentsResource:
                     document_id=document_id,
                     last_status=job.status,
                 )
-            self._client._sleep(poll_interval)
+            self._client._sleep(interval)
+            interval = _core.next_poll_interval(interval, poll_interval)
 
     def process(
         self,
@@ -205,7 +215,7 @@ class DocumentsResource:
         created = self.create(name, source.size, idempotency_key=key, external_id=external_id, sha256=sha256)
         if idempotency_key and self.get(created.id).status != "awaiting_upload":
             return self.wait_for_completion(created.id, timeout=timeout, poll_interval=poll_interval)
-        self._upload_source(created.upload_url, source, sha256)
+        self._upload_source(created.upload_url, source, sha256, _core.content_type_for(name))
         self.start(created.id)
         return self.wait_for_completion(created.id, timeout=timeout, poll_interval=poll_interval)
 
@@ -259,14 +269,18 @@ class FastOCR:
         file: Union[str, Path, bytes, BinaryIO],
         timeout: float = 300.0,
         allow_partial: bool = False,
+        filename: Optional[str] = None,
     ) -> str:
-        """Process a PDF and return its text.
+        """Process a PDF or an image (PNG, JPG, GIF, WebP, BMP) and return its text.
+
+        The file type comes from `filename`, else a path's name; bytes and streams
+        without a filename are sent as a PDF.
 
         Raises PartialResultError if the account ran out of pages partway through, so
         truncated text is never returned silently. Pass `allow_partial=True` to get the
         text of the processed pages instead.
         """
-        job = self.documents.process(file, timeout=timeout)
+        job = self.documents.process(file, filename=filename, timeout=timeout)
         if job.is_partial and not allow_partial:
             raise _core.partial_error(job)
         return self.documents.get_text(job.id)
