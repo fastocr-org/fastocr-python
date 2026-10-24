@@ -1,49 +1,39 @@
-# FastOCR Python SDK
+<div align="center">
 
-[![CI](https://github.com/fastocr-org/fastocr-python/actions/workflows/ci.yml/badge.svg)](https://github.com/fastocr-org/fastocr-python/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/fastocr-sdk.svg)](https://pypi.org/project/fastocr-sdk/)
-[![Python](https://img.shields.io/pypi/pyversions/fastocr-sdk.svg)](https://pypi.org/project/fastocr-sdk/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+<a href="https://fastocr.org">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/fastocr-org/fastocr-python/main/docs/images/logo-dark.png">
+    <img src="https://raw.githubusercontent.com/fastocr-org/fastocr-python/main/docs/images/logo-light.png" alt="FastOCR" width="200">
+  </picture>
+</a>
 
-Python client for the [FastOCR Document OCR API](https://fastocr.org/docs/documents).
-Send a scanned PDF or an image, get back its text or a searchable PDF.
+<h3>Python client for the FastOCR Document OCR API. Send a scanned PDF or an image, get back its text or a searchable PDF.</h3>
 
-- Document OCR only: PDF files up to 1 GiB, and PNG, JPG, JPEG, GIF, WebP and BMP images up to 20 MiB (an image counts as one page).
-- Sync (`FastOCR`) and async (`AsyncFastOCR`) clients with identical behavior.
-- Streams large files from disk, retries transient failures, and never creates a document twice.
-- One runtime dependency: `httpx`. Python 3.9+.
+<p>
+<a href="https://github.com/fastocr-org/fastocr-python/actions/workflows/ci.yml"><img src="https://github.com/fastocr-org/fastocr-python/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+<a href="https://pypi.org/project/fastocr-sdk/"><img src="https://img.shields.io/pypi/v/fastocr-sdk.svg?label=pypi" alt="PyPI"></a>
+<a href="https://pypi.org/project/fastocr-sdk/"><img src="https://img.shields.io/pypi/pyversions/fastocr-sdk.svg" alt="Python"></a>
+<a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+</p>
+
+<p>
+<a href="https://fastocr.org">Website</a> ·
+<a href="https://fastocr.org/docs">Docs</a> ·
+<a href="https://fastocr.org/developers/keys">Get an API key</a>
+</p>
+
+<img src="https://raw.githubusercontent.com/fastocr-org/fastocr-python/main/docs/images/readme-hero.gif" alt="FastOCR reads a scanned page in English, Arabic and Hindi and returns its text" width="800">
+
+</div>
 
 ## Install
 
 ```bash
 pip install fastocr-sdk
-```
-
-The distribution is `fastocr-sdk` and the import is `fastocr_sdk`. Do not
-install the unrelated `fastocr` package from PyPI; it is a different project.
-
-```python
-from fastocr_sdk import FastOCR
-```
-
-## Get access
-
-Any signed-in FastOCR account can create an API key and start right away.
-
-1. Sign in and create an API key in the
-   [developer console](https://fastocr.org/developers/keys). You accept the
-   [API terms](https://fastocr.org/api-terms) with your first key.
-2. Run the quickstart below with your key in `FASTOCR_API_KEY`.
-3. When you need more than the free pages, buy a prepaid API page pack by card in the
-   [developer console](https://fastocr.org/developers/keys#buy-api-pages).
-
-Each account gets 50 free document pages per month. A document that runs out of
-pages fails with buy_pages. After you buy pages, call /start again on the same
-document.
-
-```bash
 export FASTOCR_API_KEY="your_api_key"
 ```
+
+Python 3.9 or newer. The distribution is `fastocr-sdk` and the import is `fastocr_sdk`. Do not install the unrelated `fastocr` package from PyPI.
 
 ## Quickstart
 
@@ -51,33 +41,32 @@ export FASTOCR_API_KEY="your_api_key"
 from fastocr_sdk import FastOCR
 
 with FastOCR() as client:
-    text = client.extract_text("scanned_contract.pdf")
-    print(text)
+    print(client.extract_text("scanned_contract.pdf"))
 ```
 
-`extract_text` uploads the file, starts OCR, waits for it to finish, and
-returns the text. To keep the job and the searchable PDF:
+`extract_text` uploads the file, runs OCR, waits for it to finish, and returns the text. Images work the same way; pass `filename` when you send bytes.
+
+## What you get back
+
+| You get | How |
+|---|---|
+| The text of the document | `client.extract_text(file)` |
+| A searchable PDF | `client.documents.download_searchable_pdf(job.id, "out.pdf")` |
+| Status and page counts | `job.status`, `job.pages_billed`, `job.pages_total` |
+
+## Examples
+
+Runnable scripts are in [`examples/`](examples/), with RAG, archiving and cURL recipes in [`examples/cookbooks/`](examples/cookbooks/). [Full reference →](https://github.com/fastocr-org/fastocr-python/blob/main/docs/reference.md)
+
+### Searchable PDF
 
 ```python
 with FastOCR() as client:
     job = client.documents.process("scanned_archive.pdf")
     client.documents.download_searchable_pdf(job.id, "searchable.pdf")
-    print(job.id, job.status, job.pages_billed)
 ```
 
-`job.status` is `completed`, or `partial` if the account ran out of pages
-partway (`job.is_partial`); see [Out of pages](#out-of-pages).
-
-Images work the same way. The file type comes from the extension, so pass
-`filename` when you send bytes or a stream:
-
-```python
-with FastOCR() as client:
-    text = client.extract_text("receipt.jpg")
-    text = client.extract_text(image_bytes, filename="receipt.png")
-```
-
-## Async
+### Async and batches
 
 ```python
 import asyncio
@@ -85,55 +74,16 @@ from fastocr_sdk import AsyncFastOCR
 
 async def main():
     async with AsyncFastOCR() as client:
-        text = await client.extract_text("invoice.pdf")
-        print(text)
+        print(await client.extract_text("invoice.pdf"))
 
 asyncio.run(main())
 ```
 
-Accounts can have 2 documents processing at once by default (10 with a prepaid
-page allowance). When fanning out, cap concurrency with a semaphore, as in
-[`examples/async_batch.py`](examples/async_batch.py).
-
-## Step by step
-
-`process()` runs these five steps; each is also a method on `client.documents`:
-
-```python
-created = client.documents.create("scan.pdf", size_bytes)    # POST /v1/documents
-client.documents.upload(created.upload_url, "scan.pdf")      # PUT to the presigned URL (Content-Type from the extension)
-client.documents.start(created.id)                           # POST /v1/documents/{id}/start
-job = client.documents.wait_for_completion(created.id)       # GET until a final status (waits 2 s, growing to 10 s)
-text = client.documents.get_text(created.id)                 # GET /output?format=text
-```
-
-Also available: `get`, `list`, `delete`, and `get_output_url`.
-
-## Large files
-
-Files given as a path (or a seekable binary stream) are streamed from disk in
-1 MiB chunks, so a 1 GiB PDF does not need 1 GiB of memory. The upload is sent
-with a real `Content-Length`, because S3 rejects chunked uploads. A stream that
-cannot seek has no known size, so it is read into memory first.
+Accounts process 2 documents at once by default. Cap concurrency with a semaphore, as in [`examples/async_batch.py`](examples/async_batch.py).
 
 ## Errors
 
-Every error is a `FastOCRError` with `status_code`, `code`, `type`,
-`request_id` and `message`. Branch on `code`, never on `message`.
-
-| Exception | When |
-|---|---|
-| `AuthenticationError` | HTTP 401 or 403: missing, unknown, or malformed API key |
-| `BadRequestError` | HTTP 400: invalid request |
-| `NotFoundError` | HTTP 404: no such document |
-| `DocumentConflictError` | HTTP 409: wrong state, or an idempotency key reused with a different body |
-| `RateLimitError` | HTTP 429, after retries; `retry_after` holds the seconds, if sent |
-| `ServerError` | HTTP 5xx, after retries |
-| `APIConnectionError` | No response (DNS, TLS, reset, timeout), after retries |
-| `UploadError`, `DownloadError` | The presigned upload or download failed |
-| `PollingTimeoutError` | The document did not finish in `timeout` seconds |
-| `DocumentFailedError` | The document reached status `failed` |
-| `PartialResultError` | `extract_text()` finished a document that was only partly processed (out of pages) |
+Every error is a `FastOCRError` with `status_code`, `code`, `request_id` and `message`. Branch on `code`, never on `message`.
 
 ```python
 from fastocr_sdk import DocumentFailedError, FastOCR, FastOCRError
@@ -147,133 +97,40 @@ with FastOCR() as client:
         print(error.status_code, error.code, error.request_id)
 ```
 
-Requests rejected by API Gateway before they reach the API (bad or missing key,
-throttling) raise the same classes. Their body is either `{"message": ...}` or,
-on newer deployments, also carries an `error` object with `type`, `code` (for
-example `unauthorized`, `access_denied`, `throttled`) and `request_id`. A
-throttled request has no `Retry-After`, so the SDK backs off 0.5 to 1 second,
-then 1 to 2 seconds, between its retries.
+If the account runs out of pages partway, `extract_text` raises `PartialResultError` instead of returning truncated text; pass `allow_partial=True` to accept it. Transient failures are retried and a document is never created twice.
 
-A failed document is not an HTTP error: the API answers 200 with
-`status: "failed"`, and the SDK raises `DocumentFailedError` with the failure's
-`code` and `retryable` flag. Treat an unknown code as `processing_failed`.
+<details>
+<summary>Exception classes</summary>
 
-### Out of pages
+| Exception | When |
+|---|---|
+| `AuthenticationError` | HTTP 401 or 403 |
+| `BadRequestError` | HTTP 400 |
+| `NotFoundError` | HTTP 404 |
+| `DocumentConflictError` | HTTP 409 |
+| `RateLimitError` | HTTP 429, after retries |
+| `ServerError`, `APIConnectionError` | HTTP 5xx or no response, after retries |
+| `DocumentFailedError` | The document reached status `failed` |
+| `PartialResultError` | The document was only partly processed |
 
-Running out of pages ends in one of two ways, and they are handled differently.
+</details>
 
-**The document fails with `buy_pages`.** Nothing was processed. `process()` and
-`extract_text()` raise `DocumentFailedError` with `error.out_of_pages == True`.
-After pages are added to the account, start the same document again:
+Full reference: [retries, idempotency, out-of-pages recovery, configuration](https://github.com/fastocr-org/fastocr-python/blob/main/docs/reference.md).
 
-```python
-try:
-    client.documents.process("scan.pdf")
-except DocumentFailedError as error:
-    if error.out_of_pages:
-        ...  # pages added to the account
-        client.documents.start(error.document_id)
-        job = client.documents.wait_for_completion(error.document_id)
-```
+## RAG integrations
 
-**The document finishes as `partial`.** The pages that fit were processed (the
-first `pages_billed` pages) and the rest were not. `process()` returns the job,
-and `job.is_partial` is true. `extract_text()` never returns truncated text
-silently: it raises `PartialResultError`, which carries `document_id`,
-`pages_processed`, `pages_billed` and `pages_total`.
+Use [`langchain-fastocr`](https://pypi.org/project/langchain-fastocr/) for LangChain or [`llama-index-readers-fastocr`](https://pypi.org/project/llama-index-readers-fastocr/) for LlamaIndex. Both are built on this SDK.
 
-```python
-from fastocr_sdk import PartialResultError
+## Languages and files
 
-try:
-    text = client.extract_text("scan.pdf")
-except PartialResultError as error:
-    print(f"{error.pages_billed} of {error.pages_total} pages were processed")
-    partial_text = client.documents.get_text(error.document_id)
+- 100+ languages, detected automatically. No language setting is needed.
+- PDF files up to 1 GiB, and PNG, JPG, JPEG, GIF, WebP and BMP images up to 20 MiB. An image counts as one page.
+- Sync (`FastOCR`) and async (`AsyncFastOCR`) clients. One runtime dependency: `httpx`.
 
-text = client.extract_text("scan.pdf", allow_partial=True)  # accept truncated text
-```
+## Pages and pricing
 
-A partial document cannot be started again (the API answers `409
-document_not_startable`). After pages are added, submit the file again as a new
-document, which is billed as a new document.
+Any signed-in FastOCR account can create an API key and start right away. Create one in the [developer console](https://fastocr.org/developers/keys); you accept the [API terms](https://fastocr.org/api-terms) with your first key. Each account gets 50 free document pages per month. When you need more, buy a prepaid API page pack by card in the [developer console](https://fastocr.org/developers/keys#buy-api-pages).
 
-## Retries and idempotency
+## Support and license
 
-`FastOCR(max_retries=2)` retries API calls on connection errors, HTTP 429 and
-502/503/504, with exponential backoff and jitter. It waits for `Retry-After` when
-the server sends one (up to 60 seconds; longer waits are raised as
-`RateLimitError`). API calls do not retry other errors, including 400, 401, 403,
-404, 409 and 500. Uploads and result downloads retry connection errors and
-500/502/503/504, and never retry 429. The backoff for a 429 starts at 0.5 to 1
-second, then 1 to 2 seconds, and so on. Set `max_retries=0` to turn retries off.
-
-Creating a document is safe to retry because every `create` call sends an
-`Idempotency-Key`, and the same key is reused across all retries of that call.
-`process()` uses one key for the whole call. Pass your own to make your own
-retries safe too:
-
-```python
-job = client.documents.process("scan.pdf", idempotency_key="invoice-2026-10-001")
-```
-
-Calling `process()` again with the same key is safe: it finds the same document and,
-if it was already started, just waits for it instead of uploading again. A replayed
-`create` whose upload URL has expired gets a fresh `upload_url`, as long as the
-document is still awaiting upload.
-
-Reusing a key with a different filename, size, `sha256` or `external_id`
-raises `DocumentConflictError` (`idempotency_key_conflict`).
-
-## Examples
-
-Runnable scripts are in [`examples/`](examples/), and
-[`examples/cookbooks/`](examples/cookbooks/) has LangChain, LlamaIndex, batch
-archiving and cURL recipes.
-
-## Configuration
-
-```python
-FastOCR(
-    api_key=None,       # defaults to $FASTOCR_API_KEY
-    base_url=None,      # defaults to $FASTOCR_BASE_URL, then https://api.fastocr.org
-    timeout=30.0,       # seconds per API request
-    max_retries=2,
-    transfer_timeout=None,  # seconds per upload or download; defaults to 120 (10 to connect)
-    transport=None,     # an httpx transport, for example a proxy or a mock in tests
-    verify=True,        # TLS verification: True, False, a CA bundle path or an ssl.SSLContext
-    trust_env=True,     # read HTTP(S)_PROXY and SSL_CERT_FILE from the environment
-)
-```
-
-API requests and the uploads and downloads to S3 share these connection
-settings. The API key is sent only to the FastOCR API, never to S3.
-
-## Versioning and compatibility
-
-The API only adds things: new response fields, statuses, and error codes can
-appear without a new version. The SDK ignores unknown fields (they stay in each
-model's `raw` dict) and treats an unknown `status` as still processing and an
-unknown error `code` as an ordinary failure. Write your own code the same way:
-branch on the codes you know and have a default.
-
-The SDK follows [semantic versioning](https://semver.org). Releases before 1.0
-may change the SDK's own interface in a minor version, and each change is
-listed in the [changelog](CHANGELOG.md). The HTTP API itself is not versioned
-by the SDK.
-
-## Development
-
-```bash
-pip install -e ".[dev]"
-pytest
-```
-
-The suite includes an end-to-end test against a local server and a conformance test
-that checks the SDK against `openapi/fastocr-v1.json`. A live smoke test
-is skipped unless `FASTOCR_LIVE_API_KEY` and `FASTOCR_LIVE_BASE_URL` are set; it
-processes one page.
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+Questions: support@fastocr.org. Bugs and requests: [GitHub issues](https://github.com/fastocr-org/fastocr-python/issues). Full reference: [docs/reference.md](https://github.com/fastocr-org/fastocr-python/blob/main/docs/reference.md). MIT license; see [LICENSE](LICENSE).

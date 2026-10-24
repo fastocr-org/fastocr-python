@@ -1,11 +1,11 @@
 """LangChain Scanned PDF Ingestion and RAG Question-Answering Pipeline.
 
 Requires:
-    pip install fastocr-sdk langchain-core langchain-community langchain-text-splitters langchain-openai chromadb
+    pip install langchain-fastocr langchain-core langchain-community langchain-text-splitters langchain-openai chromadb
 """
 import os
-from fastocr_sdk import FastOCR
 from langchain_core.documents import Document
+from langchain_fastocr import FastOCRLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
@@ -15,24 +15,15 @@ from langchain_core.output_parsers import StrOutputParser
 
 
 def ingest_scanned_pdf(file_path: str) -> Document:
-    """Extract text from a scanned PDF with FastOCR and wrap it in a LangChain Document.
+    """Extract text from a scanned PDF with FastOCR and return it as a LangChain Document.
 
-    extract_text raises PartialResultError if the account ran out of pages partway through,
-    so a half-read document is never indexed by accident.
+    The loader keeps a partial result's text with status "partial" in the metadata,
+    so check it before indexing a document you must have in full.
     """
     print(f"Uploading and extracting text from {file_path} via FastOCR...")
-    with FastOCR() as client:
-        raw_text = client.extract_text(file_path)
-    print(f"Extraction complete ({len(raw_text)} characters extracted).")
-
-    return Document(
-        page_content=raw_text,
-        metadata={
-            "source": file_path,
-            "extractor": "FastOCR",
-            "format": "raw_text",
-        },
-    )
+    [document] = FastOCRLoader(file_path).load()
+    print(f"Extraction complete ({len(document.page_content)} characters extracted).")
+    return document
 
 
 def build_rag_chain(document: Document):
