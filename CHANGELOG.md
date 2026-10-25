@@ -4,6 +4,11 @@ All notable changes to this SDK are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [semantic versioning](https://semver.org).
 
+## [0.2.1] - 2026-10-25
+
+- Documentation only: a redesigned README with a quickstart first, links to the LangChain
+  and LlamaIndex loaders, and the full reference moved to `docs/reference.md`. No code changes.
+
 ## [0.2.0] - 2026-10-20
 
 - Images: `create`, `process` and `extract_text` accept PNG, JPG, JPEG, GIF, WebP and BMP
