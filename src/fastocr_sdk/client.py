@@ -16,6 +16,7 @@ from .errors import (
     UploadError,
 )
 from .models import (
+    Balance,
     DocumentCreateResponse,
     DocumentJob,
     DocumentListResponse,
@@ -263,6 +264,10 @@ class FastOCR:
             trust_env=trust_env,
         )
         self.documents = DocumentsResource(self)
+
+    def get_balance(self) -> Balance:
+        """Get the pages the account can still use (`GET /v1/balance`)."""
+        return Balance.from_dict(self._request("GET", "/v1/balance"))
 
     def extract_text(
         self,

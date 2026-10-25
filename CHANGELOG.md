@@ -4,6 +4,14 @@ All notable changes to this SDK are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [semantic versioning](https://semver.org).
 
+## [0.3.0] - 2026-10-25
+
+- `get_balance()` on `FastOCR` and `AsyncFastOCR` reads `GET /v1/balance` and returns a
+  `Balance` with `pages_remaining`, the free-page fields, the contract-page fields and
+  `statement_pages_remaining`.
+- README wording follows the new pricing: Page Packs are bought on the pricing page, and
+  the 50 free monthly pages are shared with PDFs on the website.
+
 ## [0.2.1] - 2026-10-25
 
 - Documentation only: a redesigned README with a quickstart first, links to the LangChain

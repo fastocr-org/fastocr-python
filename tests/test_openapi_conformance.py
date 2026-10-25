@@ -16,6 +16,7 @@ from conftest import DIGEST, call
 from fastocr_sdk import (
     AuthenticationError,
     BadRequestError,
+    Balance,
     DocumentConflictError,
     DocumentCreateResponse,
     DocumentJob,
@@ -46,14 +47,15 @@ pytestmark = pytest.mark.skipif(
 )
 
 CALLS = {
-    "createDocument": lambda docs: docs.create(
+    "createDocument": lambda c: c.documents.create(
         "scan.pdf", 1024, idempotency_key="key-1", external_id="order-1", sha256=DIGEST
     ),
-    "listDocuments": lambda docs: docs.list(limit=5, status="completed", cursor="cur", updated_since="2026-10-01"),
-    "getDocument": lambda docs: docs.get("doc-1"),
-    "deleteDocument": lambda docs: docs.delete("doc-1"),
-    "startDocument": lambda docs: docs.start("doc-1"),
-    "getDocumentOutput": lambda docs: docs.get_output_url("doc-1", "pdf"),
+    "listDocuments": lambda c: c.documents.list(limit=5, status="completed", cursor="cur", updated_since="2026-10-01"),
+    "getDocument": lambda c: c.documents.get("doc-1"),
+    "deleteDocument": lambda c: c.documents.delete("doc-1"),
+    "startDocument": lambda c: c.documents.start("doc-1"),
+    "getDocumentOutput": lambda c: c.documents.get_output_url("doc-1", "pdf"),
+    "getBalance": lambda c: c.get_balance(),
 }
 
 SUCCESS_TYPES = {
@@ -63,6 +65,7 @@ SUCCESS_TYPES = {
     "deleteDocument": dict,
     "startDocument": dict,
     "getDocumentOutput": DocumentOutputUrl,
+    "getBalance": Balance,
 }
 
 ERROR_CLASSES = {
@@ -80,6 +83,7 @@ MODEL_SCHEMAS = [
     (DocumentJob, "DocumentStatusResponse"),
     (DocumentOutputUrl, "OutputResponse"),
     (DocumentListResponse, "DocumentListResponse"),
+    (Balance, "BalanceResponse"),
     (JobError, "JobError"),
 ]
 
@@ -263,7 +267,7 @@ class TestOperation:
         assert operation_id(operation) in CALLS, f"{operation_id(operation)} has no SDK method"
         route = mock.route().respond(200, json={})
 
-        await call(CALLS[operation_id(operation)](harness.client(max_retries=0).documents))
+        await call(CALLS[operation_id(operation)](harness.client(max_retries=0)))
 
         request = route.calls.last.request
         assert request.method == method
@@ -271,7 +275,7 @@ class TestOperation:
 
     async def test_builds_a_request_that_matches_the_spec(self, mock, harness, method, path, operation):
         route = mock.route().respond(200, json={})
-        await call(CALLS[operation_id(operation)](harness.client(max_retries=0).documents))
+        await call(CALLS[operation_id(operation)](harness.client(max_retries=0)))
         request = route.calls.last.request
 
         parameters = operation.get("parameters", [])
@@ -304,21 +308,21 @@ class TestOperation:
                 headers = documented_headers(response_spec, branch)
                 mock.reset()
                 mock.route().respond(int(code), json=body, headers=headers)
-                docs = harness.client(max_retries=0).documents
-                await check_outcome(operation, status, int(code), body, headers, docs)
+                api = harness.client(max_retries=0)
+                await check_outcome(operation, status, int(code), body, headers, api)
 
 
-async def check_outcome(operation, status, code, body, headers, docs):
+async def check_outcome(operation, status, code, body, headers, api):
     call_sdk = CALLS[operation_id(operation)]
     where = f"{operation_id(operation)} {code} {body}"
     if status == "2xx":
-        result = await call(call_sdk(docs))
+        result = await call(call_sdk(api))
         assert isinstance(result, SUCCESS_TYPES[operation_id(operation)]), where
         return
 
     assert code in ERROR_CLASSES, f"{code} on {operation_id(operation)} has no intended exception"
     with pytest.raises(ERROR_CLASSES[code]) as caught:
-        await call(call_sdk(docs))
+        await call(call_sdk(api))
     error = caught.value
     assert type(error) is ERROR_CLASSES[code], where
     assert error.status_code == code

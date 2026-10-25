@@ -65,6 +65,21 @@ A failed document is not an HTTP error: the API answers 200 with
 `status: "failed"`, and the SDK raises `DocumentFailedError` with the failure's
 `code` and `retryable` flag. Treat an unknown code as `processing_failed`.
 
+### Checking the page balance
+
+`client.get_balance()` (awaited on `AsyncFastOCR`) returns a `Balance` with the pages the
+account can still use. Documents spend free pages first, then contract pages, then Page Packs.
+
+```python
+balance = client.get_balance()
+print(balance.pages_remaining)        # pages left in Page Packs
+print(balance.free_pages_remaining)   # of balance.free_pages_per_month, until balance.free_pages_reset_at
+```
+
+`contract_pages_per_month` and `contract_pages_remaining` are `None` without an API
+contract. `statement_pages_remaining` is a separate balance that document OCR does not
+spend. Buy Page Packs on the [pricing page](https://fastocr.org/pricing?from=api#packs).
+
 ### Out of pages
 
 Running out of pages ends in one of two ways, and they are handled differently.

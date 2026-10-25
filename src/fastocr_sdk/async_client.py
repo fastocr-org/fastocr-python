@@ -17,6 +17,7 @@ from .errors import (
     UploadError,
 )
 from .models import (
+    Balance,
     DocumentCreateResponse,
     DocumentJob,
     DocumentListResponse,
@@ -264,6 +265,10 @@ class AsyncFastOCR:
             trust_env=trust_env,
         )
         self.documents = AsyncDocumentsResource(self)
+
+    async def get_balance(self) -> Balance:
+        """Get the pages the account can still use (`GET /v1/balance`)."""
+        return Balance.from_dict(await self._request("GET", "/v1/balance"))
 
     async def extract_text(
         self,

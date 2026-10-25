@@ -28,6 +28,34 @@ class JobError:
 
 
 @dataclass
+class Balance:
+    """The pages an account can still use. Documents spend free pages, then contract pages, then Page Packs."""
+    pages_remaining: int
+    free_pages_per_month: int
+    free_pages_remaining: int
+    free_pages_reset_at: str
+    statement_pages_remaining: int
+    contract_pages_per_month: Optional[int] = None
+    contract_pages_remaining: Optional[int] = None
+    object: str = "balance"
+    raw: Dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Balance":
+        return cls(
+            pages_remaining=data.get("pages_remaining", 0),
+            free_pages_per_month=data.get("free_pages_per_month", 0),
+            free_pages_remaining=data.get("free_pages_remaining", 0),
+            free_pages_reset_at=data.get("free_pages_reset_at", ""),
+            statement_pages_remaining=data.get("statement_pages_remaining", 0),
+            contract_pages_per_month=data.get("contract_pages_per_month"),
+            contract_pages_remaining=data.get("contract_pages_remaining"),
+            object=data.get("object", "balance"),
+            raw=data,
+        )
+
+
+@dataclass
 class DocumentCreateResponse:
     id: str
     status: str

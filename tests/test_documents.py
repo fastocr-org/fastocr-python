@@ -76,6 +76,27 @@ async def test_requests_carry_auth_and_versioned_user_agent(mock, client):
     assert headers["User-Agent"] == f"fastocr-python/{fastocr_sdk.__version__}"
 
 
+async def test_get_balance_calls_the_route_and_returns_a_model(mock, client):
+    route = mock.get(f"{BASE_URL}/v1/balance").respond(
+        200,
+        json={
+            "object": "balance",
+            "pages_remaining": 12,
+            "free_pages_per_month": 50,
+            "free_pages_remaining": 3,
+            "free_pages_reset_at": "2026-11-01T00:00:00+00:00",
+            "contract_pages_per_month": 1000,
+            "contract_pages_remaining": 900,
+            "statement_pages_remaining": 0,
+        },
+    )
+
+    balance = await call(client.get_balance())
+
+    assert route.calls.last.request.headers["Authorization"] == "Bearer fok_test"
+    assert (balance.pages_remaining, balance.contract_pages_remaining) == (12, 900)
+
+
 async def test_create_sends_the_documented_body_and_returns_a_model(mock, client):
     route = mock.post(f"{BASE_URL}/v1/documents").respond(201, json={**CREATED, "new_field": 1})
 

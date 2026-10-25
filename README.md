@@ -53,6 +53,7 @@ with FastOCR() as client:
 | The text of the document | `client.extract_text(file)` |
 | A searchable PDF | `client.documents.download_searchable_pdf(job.id, "out.pdf")` |
 | Status and page counts | `job.status`, `job.pages_billed`, `job.pages_total` |
+| Pages left on the account | `client.get_balance().pages_remaining` |
 
 ## Examples
 
@@ -129,7 +130,7 @@ Use [`langchain-fastocr`](https://pypi.org/project/langchain-fastocr/) for LangC
 
 ## Pages and pricing
 
-Any signed-in FastOCR account can create an API key and start right away. Create one in the [developer console](https://fastocr.org/developers/keys); you accept the [API terms](https://fastocr.org/api-terms) with your first key. Each account gets 50 free document pages per month. When you need more, buy a prepaid API page pack by card in the [developer console](https://fastocr.org/developers/keys#buy-api-pages).
+Any signed-in FastOCR account can create an API key and start right away. Create one in the [developer console](https://fastocr.org/developers/keys); you accept the [API terms](https://fastocr.org/api-terms) with your first key. Every account gets 50 free pages a month, shared with PDFs on the website, and an image sent to the API is one page. When you need more, buy a Page Pack on the [pricing page](https://fastocr.org/pricing?from=api#packs). Packs and the page balance are the same on the website and in the API. Check what is left with `client.get_balance()`.
 
 ## Support and license
 

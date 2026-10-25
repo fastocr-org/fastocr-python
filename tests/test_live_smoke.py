@@ -66,6 +66,13 @@ async def test_process_download_and_delete(live, tmp_path):
     assert job.id in [d.id for d in listed.documents]
 
 
+async def test_balance_is_readable(live):
+    balance = await call(live.get_balance())
+
+    assert balance.object == "balance"
+    assert balance.free_pages_per_month >= 0 and balance.free_pages_reset_at
+
+
 async def test_unknown_document_is_not_found(live):
     with pytest.raises(NotFoundError) as caught:
         await call(live.documents.get("00000000-0000-0000-0000-000000000000"))

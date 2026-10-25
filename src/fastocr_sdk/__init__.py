@@ -19,6 +19,7 @@ from .errors import (
     UploadError,
 )
 from .models import (
+    Balance,
     DocumentCreateResponse,
     DocumentJob,
     DocumentListResponse,
@@ -31,6 +32,7 @@ __all__ = [
     "__version__",
     "FastOCR",
     "AsyncFastOCR",
+    "Balance",
     "DocumentJob",
     "DocumentCreateResponse",
     "DocumentOutputs",
