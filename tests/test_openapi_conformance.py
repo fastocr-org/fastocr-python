@@ -17,6 +17,11 @@ from fastocr_sdk import (
     AuthenticationError,
     BadRequestError,
     Balance,
+    BankStatementCreateResponse,
+    BankStatementFile,
+    BankStatementJob,
+    BankStatementListResponse,
+    BankStatementOutputUrl,
     DocumentConflictError,
     DocumentCreateResponse,
     DocumentJob,
@@ -56,7 +61,19 @@ CALLS = {
     "startDocument": lambda c: c.documents.start("doc-1"),
     "getDocumentOutput": lambda c: c.documents.get_output_url("doc-1", "pdf"),
     "getBalance": lambda c: c.get_balance(),
+    "createBankStatement": lambda c: c.bank_statements.create(
+        "statement.pdf", 1024, idempotency_key="key-1", external_id="order-1"
+    ),
+    "listBankStatements": lambda c: c.bank_statements.list(
+        limit=5, status="completed", cursor="cur", updated_since="2026-10-01"
+    ),
+    "getBankStatement": lambda c: c.bank_statements.get("stmt-1"),
+    "deleteBankStatement": lambda c: c.bank_statements.delete("stmt-1"),
+    "startBankStatement": lambda c: c.bank_statements.start("stmt-1"),
+    "getBankStatementOutput": lambda c: c.bank_statements.get_output_url("stmt-1", "qbo", account=2),
 }
+
+SDK_OMITTED_QUERY = {"getBankStatementOutput": {"schema", "include"}}
 
 SUCCESS_TYPES = {
     "createDocument": DocumentCreateResponse,
@@ -66,6 +83,12 @@ SUCCESS_TYPES = {
     "startDocument": dict,
     "getDocumentOutput": DocumentOutputUrl,
     "getBalance": Balance,
+    "createBankStatement": BankStatementCreateResponse,
+    "listBankStatements": BankStatementListResponse,
+    "getBankStatement": BankStatementJob,
+    "deleteBankStatement": dict,
+    "startBankStatement": dict,
+    "getBankStatementOutput": BankStatementOutputUrl,
 }
 
 ERROR_CLASSES = {
@@ -76,6 +99,7 @@ ERROR_CLASSES = {
     409: DocumentConflictError,
     429: RateLimitError,
     500: ServerError,
+    503: ServerError,
 }
 
 MODEL_SCHEMAS = [
@@ -85,6 +109,11 @@ MODEL_SCHEMAS = [
     (DocumentListResponse, "DocumentListResponse"),
     (Balance, "BalanceResponse"),
     (JobError, "JobError"),
+    (BankStatementCreateResponse, "StatementCreateResponse"),
+    (BankStatementListResponse, "StatementListResponse"),
+    (BankStatementOutputUrl, "StatementOutputResponse"),
+    (BankStatementJob, "StatementStatusResponse"),
+    (BankStatementFile, "StatementAccountFile"),
 ]
 
 OPERATIONS = [
@@ -287,7 +316,8 @@ class TestOperation:
                 if name in source:
                     assert not validate(parameter["schema"], coerce(parameter["schema"], source[name]), name)
             if place == "query":
-                assert set(source.keys()) == set(declared), "query parameters differ from the spec"
+                omitted = SDK_OMITTED_QUERY.get(operation_id(operation), set())
+                assert set(declared) - omitted <= set(source.keys()) <= set(declared), "query parameters differ from the spec"
 
         body_spec = operation.get("requestBody")
         if body_spec:
@@ -430,6 +460,8 @@ def python_type_matches(annotation, schema):
     schema = resolve(schema)
     if origin in (list, typing.List):
         return schema.get("type") == "array" and python_type_matches(typing.get_args(annotation)[0], schema["items"])
+    if origin in (dict, typing.Dict):
+        return schema.get("type") == "object"
     if dataclasses.is_dataclass(annotation):
         return schema.get("type") == "object"
     return {str: "string", int: "integer", bool: "boolean"}.get(annotation) == schema.get("type")
@@ -484,3 +516,16 @@ def test_job_nested_objects_are_read_from_a_schema_shaped_payload():
     assert (job.error.code, job.error.retryable) == (payload["error"]["code"], payload["error"]["retryable"])
     page = DocumentListResponse.from_dict(sample({"$ref": "#/components/schemas/DocumentListResponse"}))
     assert len(page.documents) == 1 and page.documents[0].id
+
+
+def test_statement_formats_and_output_shapes_follow_the_spec():
+    from fastocr_sdk import BankStatementOutput
+    from fastocr_sdk._core import ACCOUNTING_FORMATS, STATEMENT_FORMATS
+
+    outputs = resolve({"$ref": "#/components/schemas/StatementOutputs"})["properties"]
+    assert set(STATEMENT_FORMATS) == set(outputs)
+    output_enum = resolve({"$ref": "#/components/schemas/StatementOutputResponse"})["properties"]["format"]["enum"]
+    assert list(STATEMENT_FORMATS) == output_enum
+    accounting = resolve({"$ref": "#/components/schemas/StatementAccountingOutput"})["properties"]
+    assert {f.name for f in dataclasses.fields(BankStatementOutput)} - {"available", "url", "expires_at"} == set(accounting) - {"available"}
+    assert all(resolve(outputs[name])["required"] == ["available", "accounts"] for name in ACCOUNTING_FORMATS)

@@ -16,6 +16,24 @@ text = client.documents.get_text(created.id)                 # GET /output?forma
 
 Also available: `get`, `list`, `delete`, and `get_output_url`.
 
+## Bank statements (beta)
+
+`extract_statement()` runs the three-call flow; each step is also a method on `client.bank_statements`:
+
+```python
+created = client.bank_statements.create("statement.pdf", size_bytes)   # POST /v1/bank-statements (size_bytes is optional)
+client.bank_statements.upload(created.upload_url, "statement.pdf")      # PUT to the presigned URL
+job = client.bank_statements.wait_for_completion(created.id)            # GET until completed or failed
+client.bank_statements.save(job.id, "statement.xlsx", "xlsx")           # GET /output, then download
+```
+
+- The server starts the statement when it sees the upload, so `extract_statement()` never calls `start`. Only if a statement is still `awaiting_upload` after the upload does it call `start(id)` once per poll, which older servers need. `start` also reruns a `buy_pages` failure after pages were added.
+- Polling treats `awaiting_upload`, `queued` (the account is at its concurrency limit), `processing` and unknown statuses as still working, and never waits less than a `Retry-After` the server sends. The default timeout is 600 seconds; on `PollingTimeoutError` the statement keeps running, so call `wait_for_completion(id)` later.
+- A failed statement raises `StatementFailedError` with the job's `error.code` (for example `buy_pages` or `invalid_upload`); an unknown code is carried through like any other failure.
+- `download(id, format, account=None)` returns bytes, `save(id, path, format, account=None)` writes the file atomically, `get_output_url(id, format, account=None)` returns a one-hour link, and `json(id)` returns the structured data. `account` (1 is the first) picks one account of `qbo`, `quickbooks_csv`, `qfx` and `ofx` files; without it a statement with several accounts is an error.
+- A completed `get(id)` carries links in `job.outputs[format].url`; accounting formats list the accounts in `outputs[format].accounts` and the links in `outputs[format].files`. `list(...)` carries no links.
+- Also available: `get`, `list`, `delete`.
+
 ## Large files
 
 Files given as a path (or a seekable binary stream) are streamed from disk in

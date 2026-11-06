@@ -33,9 +33,10 @@ from .errors import (
     PartialResultError,
     RateLimitError,
     ServerError,
+    StatementFailedError,
     UploadError,
 )
-from .models import DocumentJob, JobError
+from .models import BankStatementJob, DocumentJob, JobError
 
 DEFAULT_BASE_URL = "https://api.fastocr.org"
 DEFAULT_MAX_RETRIES = 2
@@ -94,6 +95,51 @@ def content_type_for(filename: str) -> str:
     if extension not in CONTENT_TYPES:
         raise ValueError("FastOCR Document API accepts PDF, PNG, JPG, JPEG, GIF, WebP and BMP files")
     return CONTENT_TYPES[extension]
+
+
+STATEMENT_CONTENT_TYPES = {
+    "pdf": "application/pdf",
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "webp": "image/webp",
+}
+ACCOUNTING_FORMATS = ("qbo", "quickbooks_csv", "qfx", "ofx")
+STATEMENT_FORMATS = ("json", "csv", "xlsx") + ACCOUNTING_FORMATS
+STATEMENT_WAITING_STATUSES = frozenset({"awaiting_upload", "queued"})
+
+
+def statement_content_type_for(filename: str) -> str:
+    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if extension not in STATEMENT_CONTENT_TYPES:
+        raise ValueError("FastOCR Bank Statement API accepts PDF, PNG, JPG, JPEG and WebP files")
+    return STATEMENT_CONTENT_TYPES[extension]
+
+
+def statement_create_payload(filename: str, size_bytes: Optional[int], external_id: Optional[str]) -> Dict[str, Any]:
+    statement_content_type_for(filename)
+    payload: Dict[str, Any] = {"filename": filename}
+    if size_bytes is not None:
+        payload["size_bytes"] = size_bytes
+    if external_id is not None:
+        payload["external_id"] = external_id
+    return payload
+
+
+def statement_output_params(file_format: str, account: Optional[int]) -> Dict[str, Any]:
+    if file_format not in STATEMENT_FORMATS:
+        raise ValueError(f"file_format must be one of {', '.join(STATEMENT_FORMATS)}")
+    if account is None:
+        return {"format": file_format}
+    if file_format not in ACCOUNTING_FORMATS:
+        raise ValueError(f"account applies to {', '.join(ACCOUNTING_FORMATS)} only")
+    if isinstance(account, bool) or not isinstance(account, int) or account < 1:
+        raise ValueError("account must be a positive integer (1 is the first account)")
+    return {"format": file_format, "account": account}
+
+
+def statement_path(statement_id: str, suffix: str = "") -> str:
+    return f"/v1/bank-statements/{quote(statement_id, safe='')}{suffix}"
 
 
 def check_output_format(file_format: str) -> None:
@@ -239,9 +285,21 @@ def upload_headers(size: int, sha256: Optional[str], content_type: str = "applic
 
 
 def failed_error(job: DocumentJob) -> DocumentFailedError:
-    error = job.error or JobError(code="processing_failed", message="Document processing failed", retryable=True)
-    return DocumentFailedError(
-        error.message or "Document processing failed",
+    return _failed(job, DocumentFailedError, "Document")
+
+
+def statement_failed_error(job: BankStatementJob) -> StatementFailedError:
+    failure = _failed(job, StatementFailedError, "Bank statement")
+    assert isinstance(failure, StatementFailedError)
+    return failure
+
+
+def _failed(
+    job: Union[DocumentJob, BankStatementJob], error_class: Type[DocumentFailedError], noun: str
+) -> DocumentFailedError:
+    error = job.error or JobError(code="processing_failed", message=f"{noun} processing failed", retryable=True)
+    return error_class(
+        error.message or f"{noun} processing failed",
         document_id=job.id,
         code=error.code,
         retryable=error.retryable,
@@ -351,9 +409,9 @@ def upload_content_type(file: FileInput, content_type: Optional[str]) -> str:
     return CONTENT_TYPES.get(extension, "application/pdf")
 
 
-def filename_for(file: FileInput, filename: Optional[str]) -> str:
+def filename_for(file: FileInput, filename: Optional[str], default: str = "document.pdf") -> str:
     if filename:
         return filename
     if isinstance(file, (str, Path)):
         return Path(file).name
-    return "document.pdf"
+    return default

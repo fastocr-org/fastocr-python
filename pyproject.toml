@@ -5,12 +5,12 @@ build-backend = "hatchling.build"
 [project]
 name = "fastocr-sdk"
 dynamic = ["version"]
-description = "Python client for the FastOCR Document OCR API: extract text and searchable PDFs from scanned PDFs."
+description = "Python client for the FastOCR API: text and searchable PDFs from scanned PDFs, and Excel, CSV and QuickBooks files from bank statements."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
 license-files = ["LICENSE"]
-keywords = ["ocr", "pdf", "searchable-pdf", "document-ai", "text-extraction", "rag", "fastocr"]
+keywords = ["ocr", "pdf", "searchable-pdf", "document-ai", "text-extraction", "bank-statements", "rag", "fastocr"]
 authors = [
     { name = "FastOCR", email = "support@fastocr.org" }
 ]

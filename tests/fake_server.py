@@ -6,12 +6,15 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PAGES_TEXT = "Hello مرحبا 世界"
 RESULT_PDF = b"%PDF-1.4 searchable"
+STATEMENT_XLSX = b"PK statement workbook"
 
 
 class FakeApi:
-    def __init__(self, polls_before_done=1, final_status="completed"):
+    def __init__(self, polls_before_done=1, final_status="completed", statement_autostart=True):
         self.polls_before_done = polls_before_done
         self.final_status = final_status
+        self.statement_autostart = statement_autostart
+        self.statement_started = False
         self.polls = 0
         self.api_requests = []
         self.uploads = []
@@ -68,7 +71,23 @@ class FakeApi:
                 )
 
             def do_POST(self):
-                if self.path == "/v1/documents":
+                if self.path == "/v1/bank-statements":
+                    self.record_api_request()
+                    body = self.read_json_body()
+                    key = self.headers["Idempotency-Key"]
+                    stmt_id = api.created.setdefault(key, f"stmt_{len(api.created) + 1}")
+                    api.created[stmt_id] = body
+                    self.send_json(201, {
+                        "id": stmt_id,
+                        "status": "awaiting_upload",
+                        "upload_url": f"{api.base_url}/s3/{stmt_id}?X-Amz-Signature=abc",
+                        "expires_at": "2099-01-01T00:00:00+00:00",
+                    })
+                elif self.path.startswith("/v1/bank-statements/") and self.path.endswith("/start"):
+                    self.record_api_request()
+                    api.statement_started = True
+                    self.send_json(202, {"status": "processing"})
+                elif self.path == "/v1/documents":
                     self.record_api_request()
                     body = self.read_json_body()
                     key = self.headers["Idempotency-Key"]
@@ -113,14 +132,49 @@ class FakeApi:
                 upload["sha256"] = digest.hexdigest()
                 self.send_bytes(200, b"", "text/plain")
 
+            def statement_body(self, stmt_id):
+                uploaded = bool(api.uploads)
+                started = api.statement_started or api.statement_autostart
+                if not (uploaded and started):
+                    return {"id": stmt_id, "status": "awaiting_upload"}
+                api.polls += 1
+                if api.polls <= api.polls_before_done:
+                    return {"id": stmt_id, "status": "processing"}
+                if api.final_status == "failed":
+                    return {"id": stmt_id, "status": "failed", "error": {
+                        "type": "processing_error", "code": "processing_failed",
+                        "message": "Statement processing failed", "retryable": True,
+                    }}
+                return {
+                    "id": stmt_id, "status": "completed", "external_id": None,
+                    "pages_billed": 1, "pages_total": 1, "has_transactions": True, "needs_review": False,
+                    "outputs": {"xlsx": {
+                        "available": True,
+                        "url": f"{api.base_url}/download/statement-xlsx",
+                        "expires_at": "2099-01-01T00:00:00+00:00",
+                    }},
+                }
+
             def do_GET(self):
                 if self.path.startswith("/download/"):
-                    if self.path.endswith("text"):
+                    if self.path.endswith("statement-xlsx"):
+                        self.send_bytes(200, STATEMENT_XLSX, "application/octet-stream")
+                    elif self.path.endswith("text"):
                         self.send_bytes(200, PAGES_TEXT.encode(), "text/plain")
                     else:
                         self.send_bytes(200, RESULT_PDF, "application/pdf")
                     return
                 self.record_api_request()
+                if "/v1/bank-statements/" in self.path:
+                    if "/output" in self.path:
+                        self.send_json(200, {
+                            "format": "xlsx",
+                            "url": f"{api.base_url}/download/statement-xlsx",
+                            "expires_at": "2099-01-01T00:00:00+00:00",
+                        })
+                    else:
+                        self.send_json(200, self.statement_body(self.path.rsplit("/", 1)[-1]))
+                    return
                 if "/output" in self.path:
                     kind = "pdf" if "format=pdf" in self.path else "text"
                     self.send_json(200, {

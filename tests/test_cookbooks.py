@@ -11,8 +11,8 @@ import pytest
 
 import fastocr_sdk
 from fastocr_sdk import AsyncFastOCR, DocumentJob, FastOCR
-from fastocr_sdk.async_client import AsyncDocumentsResource
-from fastocr_sdk.client import DocumentsResource
+from fastocr_sdk.async_client import AsyncBankStatementsResource, AsyncDocumentsResource
+from fastocr_sdk.client import BankStatementsResource, DocumentsResource
 
 HERE = Path(__file__).resolve().parent
 SDK_NAMES = {"FastOCR", "AsyncFastOCR"}
@@ -77,6 +77,7 @@ def test_script_compiles_and_matches_the_sdk(path):
     is_async = "AsyncFastOCR" in source
     client_class = AsyncFastOCR if is_async else FastOCR
     resource_class = AsyncDocumentsResource if is_async else DocumentsResource
+    statements_class = AsyncBankStatementsResource if is_async else BankStatementsResource
     clients = client_expressions(tree)
     jobs = job_variables(tree, clients)
     where = path.name
@@ -97,8 +98,12 @@ def test_script_compiles_and_matches_the_sdk(path):
         if not isinstance(func, ast.Attribute):
             continue
         owner = ast.unparse(func.value)
-        if owner in clients and func.attr == "extract_text":
-            check_call(node, inspect.signature(client_class.extract_text), where)
+        if owner in clients and func.attr in ("extract_text", "extract_statement"):
+            check_call(node, inspect.signature(getattr(client_class, func.attr)), where)
+        elif owner.endswith(".bank_statements") and owner.removesuffix(".bank_statements") in clients:
+            method = getattr(statements_class, func.attr, None)
+            assert method is not None and not func.attr.startswith("_"), f"{where}: no bank_statements.{func.attr}"
+            check_call(node, inspect.signature(method), where)
         elif owner.endswith(".documents") and owner.removesuffix(".documents") in clients:
             method = getattr(resource_class, func.attr, None)
             assert method is not None and not func.attr.startswith("_"), f"{where}: no documents.{func.attr}"

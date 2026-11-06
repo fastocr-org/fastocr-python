@@ -7,7 +7,7 @@
   </picture>
 </a>
 
-<h3>Python client for the FastOCR Document OCR API. Send a scanned PDF or an image, get back its text or a searchable PDF.</h3>
+<h3>Python client for the FastOCR API. Send a scanned PDF or an image, get back its text or a searchable PDF. Send a bank statement, get back Excel, CSV, JSON or QuickBooks files.</h3>
 
 <p>
 <a href="https://github.com/fastocr-org/fastocr-python/actions/workflows/ci.yml"><img src="https://github.com/fastocr-org/fastocr-python/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -53,7 +53,8 @@ with FastOCR() as client:
 | The text of the document | `client.extract_text(file)` |
 | A searchable PDF | `client.documents.download_searchable_pdf(job.id, "out.pdf")` |
 | Status and page counts | `job.status`, `job.pages_billed`, `job.pages_total` |
-| Pages left on the account | `client.get_balance().pages_remaining` |
+| A bank statement as Excel, CSV, JSON or QuickBooks files (beta) | `client.extract_statement(file)`, then `client.bank_statements.save(job.id, "out.xlsx", "xlsx")` |
+| Pages left on the account | `client.get_balance().pages_remaining`, `statement_pages_remaining` |
 
 ## Examples
 
@@ -66,6 +67,18 @@ with FastOCR() as client:
     job = client.documents.process("scanned_archive.pdf")
     client.documents.download_searchable_pdf(job.id, "searchable.pdf")
 ```
+
+### Bank statements (beta)
+
+```python
+with FastOCR() as client:
+    job = client.extract_statement("statement.pdf")          # upload, then wait for the result
+    print(job.pages_billed, job.needs_review)
+    client.bank_statements.save(job.id, "statement.xlsx", "xlsx")
+    data = client.bank_statements.json(job.id)               # accounts, balances and transactions
+```
+
+Formats: `json`, `csv`, `xlsx`, `qbo`, `quickbooks_csv`, `qfx` and `ofx`. For a statement with several accounts, pass `account=2` (1 is the first) to `save` or `download` for the accounting formats. `job.outputs["xlsx"].url` is a download link that works for one hour; call `client.bank_statements.get(job.id)` again for fresh links. If extraction fails, `extract_statement` raises `StatementFailedError` (a `DocumentFailedError`) with the failure `code`. Statements take PDF, PNG, JPG, JPEG and WebP files, and their pages come from a balance of their own, shared with the website's bank statement converter. A runnable script is in [`examples/extract_bank_statement.py`](examples/extract_bank_statement.py).
 
 ### Async and batches
 
@@ -112,6 +125,7 @@ If the account runs out of pages partway, `extract_text` raises `PartialResultEr
 | `RateLimitError` | HTTP 429, after retries |
 | `ServerError`, `APIConnectionError` | HTTP 5xx or no response, after retries |
 | `DocumentFailedError` | The document reached status `failed` |
+| `StatementFailedError` | The bank statement reached status `failed` (a `DocumentFailedError`) |
 | `PartialResultError` | The document was only partly processed |
 
 </details>
@@ -120,7 +134,7 @@ Full reference: [retries, idempotency, out-of-pages recovery, configuration](htt
 
 ## RAG integrations
 
-Use [`langchain-fastocr`](https://pypi.org/project/langchain-fastocr/) for LangChain or [`llama-index-readers-fastocr`](https://pypi.org/project/llama-index-readers-fastocr/) for LlamaIndex. Both are built on this SDK.
+Use [`langchain-fastocr`](https://pypi.org/project/langchain-fastocr/) for LangChain or [`llama-index-readers-fastocr`](https://pypi.org/project/llama-index-readers-fastocr/) for LlamaIndex. Both are built on this SDK, and both read bank statements too (one document per transaction).
 
 ## Languages and files
 
@@ -130,7 +144,7 @@ Use [`langchain-fastocr`](https://pypi.org/project/langchain-fastocr/) for LangC
 
 ## Pages and pricing
 
-Any signed-in FastOCR account can create an API key and start right away. Create one in the [developer console](https://fastocr.org/developers/keys); you accept the [API terms](https://fastocr.org/api-terms) with your first key. Every account gets 50 free pages a month, shared with PDFs on the website, and an image sent to the API is one page. When you need more, buy a Page Pack on the [pricing page](https://fastocr.org/pricing?from=api#packs). Packs and the page balance are the same on the website and in the API. Check what is left with `client.get_balance()`.
+Any signed-in FastOCR account can create an API key and start right away. Create one in the [developer console](https://fastocr.org/developers/keys); you accept the [API terms](https://fastocr.org/api-terms) with your first key. Every account gets 20 free pages a month, shared with PDFs on the website, and an image sent to the API is one page. When you need more, buy a Page Pack on the [pricing page](https://fastocr.org/pricing?from=api#packs). Packs and the page balance are the same on the website and in the API. Bank statement pages are a separate balance that new accounts start with some free pages in; check both with `client.get_balance()`.
 
 ## Support and license
 

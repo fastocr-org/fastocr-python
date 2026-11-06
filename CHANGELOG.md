@@ -4,6 +4,21 @@ All notable changes to this SDK are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [semantic versioning](https://semver.org).
 
+## [0.4.0] - 2026-11-05
+
+- Bank statements (beta): `extract_statement(path)` on `FastOCR` and `AsyncFastOCR` uploads a
+  statement (PDF, PNG, JPG, JPEG or WebP), waits for it, and returns a `BankStatementJob`
+  with download links in `outputs`. It never calls `start` on a server that starts the
+  statement itself, and falls back to `start` on one that does not.
+- `client.bank_statements` has `create`, `upload`, `start`, `get`, `list`, `delete`,
+  `get_output_url`, `download`, `save`, `json`, `wait_for_completion` and `process`. Formats:
+  `json`, `csv`, `xlsx`, `qbo`, `quickbooks_csv`, `qfx` and `ofx`, with `account` for
+  statements that have several accounts.
+- New `StatementFailedError` (a `DocumentFailedError`) for failed statements, and the models
+  `BankStatementJob`, `BankStatementOutput`, `BankStatementFile`, `BankStatementCreateResponse`,
+  `BankStatementListResponse` and `BankStatementOutputUrl`.
+- No change to the document methods.
+
 ## [0.3.0] - 2026-10-25
 
 - `get_balance()` on `FastOCR` and `AsyncFastOCR` reads `GET /v1/balance` and returns a

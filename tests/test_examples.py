@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from fake_server import PAGES_TEXT, RESULT_PDF, FakeApi
+from fake_server import PAGES_TEXT, RESULT_PDF, STATEMENT_XLSX, FakeApi
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 
@@ -72,3 +72,13 @@ def test_async_batch_writes_a_text_file_per_pdf(api, tmp_path):
     assert result.returncode == 0, result.stderr
     assert sorted(p.name for p in tmp_path.glob("*.txt")) == ["a.txt", "b.txt", "c.txt"]
     assert (tmp_path / "a.txt").read_text(encoding="utf-8") == PAGES_TEXT
+
+
+def test_extract_bank_statement_saves_the_workbook(api, pdf, tmp_path):
+    out = tmp_path / "statement.xlsx"
+
+    result = run_example(api, "extract_bank_statement.py", pdf, out)
+
+    assert result.returncode == 0, result.stderr
+    assert out.read_bytes() == STATEMENT_XLSX
+    assert "1 page(s)" in result.stdout

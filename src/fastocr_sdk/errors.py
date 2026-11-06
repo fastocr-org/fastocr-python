@@ -143,3 +143,15 @@ class DocumentFailedError(FastOCRError):
     @property
     def out_of_pages(self) -> bool:
         return self.code == "buy_pages"
+
+
+class StatementFailedError(DocumentFailedError):
+    """The bank statement reached status `failed`. Same fields as DocumentFailedError.
+
+    `code == "buy_pages"` means the account is out of statement pages: after pages are
+    added, call `bank_statements.start(statement_id)` to run the same statement again.
+    """
+
+    @property
+    def statement_id(self) -> str:
+        return self.document_id

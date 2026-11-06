@@ -1,4 +1,4 @@
-"""FastOCR Python SDK for the Document OCR API."""
+"""FastOCR Python SDK for the Document OCR and Bank Statement APIs."""
 
 from ._version import __version__
 from .async_client import AsyncFastOCR
@@ -16,10 +16,17 @@ from .errors import (
     PollingTimeoutError,
     RateLimitError,
     ServerError,
+    StatementFailedError,
     UploadError,
 )
 from .models import (
     Balance,
+    BankStatementCreateResponse,
+    BankStatementFile,
+    BankStatementJob,
+    BankStatementListResponse,
+    BankStatementOutput,
+    BankStatementOutputUrl,
     DocumentCreateResponse,
     DocumentJob,
     DocumentListResponse,
@@ -33,6 +40,12 @@ __all__ = [
     "FastOCR",
     "AsyncFastOCR",
     "Balance",
+    "BankStatementJob",
+    "BankStatementCreateResponse",
+    "BankStatementFile",
+    "BankStatementListResponse",
+    "BankStatementOutput",
+    "BankStatementOutputUrl",
     "DocumentJob",
     "DocumentCreateResponse",
     "DocumentOutputs",
@@ -51,5 +64,6 @@ __all__ = [
     "PollingTimeoutError",
     "RateLimitError",
     "ServerError",
+    "StatementFailedError",
     "UploadError",
 ]

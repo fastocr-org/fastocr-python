@@ -166,3 +166,149 @@ class DocumentOutputUrl:
             pages_total=data.get("pages_total"),
             raw=data,
         )
+
+
+@dataclass
+class BankStatementCreateResponse:
+    id: str
+    status: str
+    upload_url: str
+    expires_at: str
+    raw: Dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "BankStatementCreateResponse":
+        return cls(
+            id=data.get("id", ""),
+            status=data.get("status", ""),
+            upload_url=data.get("upload_url", ""),
+            expires_at=data.get("expires_at", ""),
+            raw=data,
+        )
+
+
+@dataclass
+class BankStatementFile:
+    """One account's file of an accounting format (QBO, QuickBooks CSV, QFX, OFX)."""
+    account: int
+    url: str
+    expires_at: str
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "BankStatementFile":
+        return cls(account=int(data.get("account") or 0), url=data.get("url", ""), expires_at=data.get("expires_at", ""))
+
+
+@dataclass
+class BankStatementOutput:
+    """One output format of a statement.
+
+    `url` is set on a completed single-statement GET. An accounting format has one
+    file per account: `accounts` lists the account numbers and, once the statement
+    is completed, `files` holds each account's link.
+    """
+    available: bool = False
+    url: Optional[str] = None
+    expires_at: Optional[str] = None
+    accounts: List[int] = field(default_factory=list)
+    files: List[BankStatementFile] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: Any) -> "BankStatementOutput":
+        data = _dict(data)
+        accounts = data.get("accounts")
+        files = data.get("files")
+        return cls(
+            available=bool(data.get("available")),
+            url=data.get("url"),
+            expires_at=data.get("expires_at"),
+            accounts=[int(item) for item in accounts] if isinstance(accounts, list) else [],
+            files=[BankStatementFile.from_dict(item) for item in files if isinstance(item, dict)]
+            if isinstance(files, list)
+            else [],
+        )
+
+
+@dataclass
+class BankStatementJob:
+    """A bank statement job. `status` is a plain string; new statuses may appear.
+
+    `outputs` maps a format (`json`, `csv`, `xlsx`, `qbo`, `quickbooks_csv`, `qfx`, `ofx`)
+    to its `BankStatementOutput`.
+    """
+    id: str
+    status: str
+    external_id: Optional[str] = None
+    pages_billed: Optional[int] = None
+    pages_total: Optional[int] = None
+    has_transactions: bool = True
+    needs_review: Optional[bool] = None
+    coverage: Optional[str] = None
+    outputs: Dict[str, BankStatementOutput] = field(default_factory=dict)
+    error: Optional[JobError] = None
+    raw: Dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @property
+    def is_completed(self) -> bool:
+        return self.status == "completed"
+
+    @property
+    def is_failed(self) -> bool:
+        return self.status == "failed"
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "BankStatementJob":
+        outputs = data.get("outputs")
+        needs_review = data.get("needs_review")
+        return cls(
+            id=data.get("id", ""),
+            status=data.get("status", ""),
+            external_id=data.get("external_id"),
+            pages_billed=data.get("pages_billed"),
+            pages_total=data.get("pages_total"),
+            has_transactions=bool(data.get("has_transactions", True)),
+            needs_review=None if needs_review is None else bool(needs_review),
+            coverage=data.get("coverage"),
+            outputs={name: BankStatementOutput.from_dict(item) for name, item in _dict(outputs).items()},
+            error=JobError.from_dict(data.get("error")),
+            raw=data,
+        )
+
+
+@dataclass
+class BankStatementListResponse:
+    bank_statements: List[BankStatementJob]
+    next_cursor: Optional[str] = None
+    raw: Dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "BankStatementListResponse":
+        return cls(
+            bank_statements=[BankStatementJob.from_dict(item) for item in data.get("bank_statements") or []],
+            next_cursor=data.get("next_cursor"),
+            raw=data,
+        )
+
+
+@dataclass
+class BankStatementOutputUrl:
+    """Presigned download URL for one statement format, valid for one hour."""
+    format: str
+    url: str
+    expires_at: str
+    schema: Optional[str] = None
+    pages_billed: Optional[int] = None
+    pages_total: Optional[int] = None
+    raw: Dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "BankStatementOutputUrl":
+        return cls(
+            format=data.get("format", ""),
+            url=data.get("url", ""),
+            expires_at=data.get("expires_at", ""),
+            schema=data.get("schema"),
+            pages_billed=data.get("pages_billed"),
+            pages_total=data.get("pages_total"),
+            raw=data,
+        )
